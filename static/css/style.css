@@ -1,0 +1,413 @@
+
+/* Reset de base */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background: linear-gradient(to right, #f4f4f4, #e8e8e8);
+    color: #333;
+    line-height: 1.6;
+    overflow-x: hidden;
+}
+
+/* Header */
+header {
+    background: linear-gradient(90deg, #003d6b, #005aa3);
+    color: #fff;
+    padding: 1.5rem 1rem;
+    text-align: center;
+    position: relative;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+header img {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    height: 60px;
+}
+
+header h1 {
+    font-size: 2.5rem;
+    text-transform: uppercase;
+    letter-spacing: 1.8px;
+}
+
+/* Main container */
+main {
+    padding: 2rem;
+}
+
+.container {
+    max-width: 1100px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 15px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+    padding: 30px;
+}
+
+/* Titres */
+h2 {
+    color: #444;
+    font-size: 2rem;
+    text-align: center;
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Sections */
+.section {
+    background: #f9f9f9;
+    margin: 2rem 0;
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Input file style */
+.file-input-container {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    border: 2px dashed #005aa3; /* Couleurs SIPPEREC */
+    border-radius: 12px;
+    transition: border-color 0.3s ease;
+}
+
+.file-input-container:hover {
+    border-color: #006b0e; 
+}
+
+.file-input-container label {
+    background: linear-gradient(90deg, #005aa3, #003d6b); /* Couleurs SIPPEREC */
+    color: #fff;
+    padding: 1rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+    display: inline-block;
+    transition: all 0.3s ease;
+    margin-bottom: 10px;
+    min-width: 300px; /* Taille minimale uniforme */
+    text-align: center;
+}
+
+.file-input-container label:hover {
+    background: linear-gradient(90deg, #003d6b, #002a4e); /* Couleurs SIPPEREC */
+    transform: scale(1.05);
+}
+
+.selected-file {
+    margin-top: 10px;
+    font-style: italic;
+    color: #666;
+}
+
+/* Boutons uniformes */
+button {
+    width: 250px; /* Taille fixe pour uniformité */
+    height: 50px; /* Hauteur fixe */
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(90deg, #005aa3, #003d6b); /* Couleurs SIPPEREC */
+    color: #fff;
+    font-size: 1rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+}
+
+button:hover {
+    background: linear-gradient(90deg, #003d6b, #002a4e); /* Couleurs SIPPEREC */
+    transform: translateY(-2px) scale(1.05);
+}
+
+.button-container {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+/* Dropdown for file list */
+.file-list {
+    max-height: 150px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 10px;
+    text-align: left;
+    margin-top: 1rem;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.file-list li {
+    list-style: none;
+    padding: 8px;
+    font-size: 1rem;
+    border-bottom: 1px solid #eee;
+}
+
+.file-list li:last-child {
+    border-bottom: none;
+}
+
+/* Résultats */
+.result-container {
+    margin-top: 2rem;
+    text-align: center;
+    padding: 1.5rem;
+    background: #f9f9f9;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.result-container h3 {
+    font-size: 1.8rem;
+    color: #444;
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+}
+
+.result-container .file-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 15px;
+    border-radius: 8px;
+    text-align: left;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+}
+
+.result-container .file-list li {
+    list-style: none;
+    border-bottom: 1px solid #eee;
+    padding: 8px;
+    font-size: 1rem;
+}
+
+.result-container .file-list li:last-child {
+    border-bottom: none;
+}
+
+/* Download button */
+.btn-download {
+    display: inline-block;
+    margin-top: 15px;
+    padding: 12px 20px;
+    background: linear-gradient(90deg, #005aa3, #003d6b); 
+    color: #fff;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.btn-download:hover {
+    background: linear-gradient(90deg, #003d6b, #002a4e); /* Couleurs SIPPEREC */
+    transform: scale(1.05);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    button {
+        width: 100%;
+        font-size: 0.9rem;
+    }
+}
+
+
+/* Styles pour les boutons Importer et Importer les Deux Exports */
+.btn-import-green {
+    display: block; /* S'assure qu'ils sont affichés en tant que blocs pour un centrage facile */
+    margin: 20px auto; /* Centre horizontalement et ajoute un espacement vertical */
+    width: 400px; /* Largeur fixe pour uniformité */
+    height: 50px; /* Hauteur fixe */
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(90deg, #28a745, #218838); /* Dégradé vert */
+    color: #fff; /* Texte en blanc */
+    font-size: 1rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.3s ease; /* Douce transition sur l'effet hover */
+    text-align: center;
+}
+
+.btn-import-green:hover {
+    background: linear-gradient(90deg, #218838, #1e7e34); /* Vert plus foncé au survol */
+    transform: scale(1.05); /* Légère mise en avant */
+}
+
+
+/* Styles pour les boutons Télécharger */
+.btn-download-green {
+    background: linear-gradient(90deg, #28a745, #218838); /* Dégradé vert */
+    color: #fff; /* Texte en blanc */
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    text-decoration: none;
+    padding: 12px 20px; /* Espacement interne */
+    display: inline-block;
+    text-align: center;
+    transition: all 0.3s ease; /* Transition douce pour l'effet hover */
+    margin-top: 15px; /* Espacement supérieur */
+}
+
+.btn-download-green:hover {
+    background: linear-gradient(90deg, #218838, #1e7e34); /* Vert plus foncé au survol */
+    transform: scale(1.05); /* Effet de zoom léger */
+}
+
+/* Styles pour les tableaux */
+table {
+    width: 100%; /* Le tableau occupe toute la largeur du conteneur */
+    border-collapse: collapse; /* Fusion des bordures pour un look propre */
+    margin: 20px 0; /* Espacement au-dessus et au-dessous */
+    font-size: 1rem; /* Taille de police */
+    text-align: left; /* Texte aligné à gauche */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Ombre pour un effet 3D */
+}
+
+table thead {
+    background-color: #28a745; /* Couleur d'en-tête verte */
+    color: #fff; /* Texte en blanc */
+}
+
+table th, table td {
+    padding: 12px 15px; /* Espacement interne pour un tableau aéré */
+    border: 1px solid #ddd; /* Bordure légère entre les cellules */
+}
+
+table tbody tr:nth-child(even) {
+    background-color: #f9f9f9; /* Couleur de fond alternée pour les lignes paires */
+}
+
+table tbody tr:hover {
+    background-color: #eafbea; /* Surlignage léger au survol */
+}
+
+/* Boutons Télécharger */
+a.download-btn {
+    display: inline-block;
+    background: linear-gradient(90deg, #28a745, #218838); /* Dégradé vert */
+    color: #fff; /* Texte blanc */
+    padding: 10px 20px; /* Espacement interne */
+    border-radius: 8px; /* Coins arrondis */
+    font-size: 1rem; /* Taille de police */
+    font-weight: bold; /* Texte en gras */
+    text-transform: uppercase; /* Texte en majuscules */
+    text-decoration: none; /* Pas de soulignement */
+    margin-right: 10px; /* Espacement horizontal */
+    transition: all 0.3s ease; /* Transition douce pour l'effet hover */
+}
+
+a.download-btn:hover {
+    background: linear-gradient(90deg, #218838, #1e7e34); /* Dégradé plus sombre au survol */
+    transform: scale(1.05); /* Zoom léger */
+}
+
+/* Style pour les cases de date (type month) */
+.export-date-input {
+    width: 250px; /* Largeur personnalisée */
+    padding: 10px 15px; /* Espacement interne */
+    font-size: 1rem; /* Taille de la police */
+    align-items: center;
+    color: #333; /* Couleur du texte */
+    border: 1px solid #ddd; /* Bordure légère */
+    border-radius: 8px; /* Coins arrondis */
+    background: #f9f9f9; /* Couleur de fond */
+    transition: all 0.3s ease; /* Transition pour les effets */
+}
+
+/* Focus : mettre en avant la case sélectionnée */
+.export-date-input:focus {
+    outline: none; /* Retire le contour par défaut */
+    border-color: #28a745; /* Bordure verte */
+    box-shadow: 0 0 5px rgba(40, 167, 69, 0.5); /* Effet lumineux */
+    background: #fff; /* Fond blanc pour la case active */
+}
+
+/* Pour s'assurer qu'il est aligné avec les labels */
+.date-selector label {
+    font-size: 1rem; /* Taille de police uniforme */
+    margin-bottom: 5px; /* Espacement avec l'input */
+    display: block; /* Forcer un alignement vertical */
+    color: #444; /* Couleur du texte */
+}
+
+
+/* Conteneur pour le logo */
+.logo-container {
+    background-color: #fff; /* Fond blanc */
+    padding: 20px; /* Espacement interne */
+    border-radius: 12px; /* Coins arrondis */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Ombre légère */
+    display: flex;
+    width: 100px; 
+    height: 40px; 
+    margin: 12 auto; 
+}
+
+/* Image à l'intérieur du conteneur */
+.logo-container img {
+    max-width: 100%; 
+    max-height: 100%; 
+    object-fit: contain; 
+   
+}
+
+
+.drop-zone {
+    border: 2px dashed #005aa3;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    font-size: 1rem;
+    color: #005aa3;
+    cursor: pointer;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.drop-zone.dragover {
+    background-color: #e6f7ff;
+    border-color: #003d6b;
+    color: #003d6b;
+}
+
+.logout-container {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+}
+
+.btn-logout {
+    background: #ff4d4d;
+    color: white;
+    padding: 10px 15px;
+    border-radius: 5px;
+    text-decoration: none;
+    font-weight: bold;
+    transition: 0.3s ease;
+}
+
+.btn-logout:hover {
+    background: #cc0000;
+}
+

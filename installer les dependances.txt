@@ -1,0 +1,8 @@
+Mettre à jour les dépendances uniquement dans cet environnement
+pip install --upgrade -r requirements.txt
+
+ générer un requirements.txt avec les versions exactes utilisées
+pip freeze > requirements.txt
+
+Installer les dépendances :
+pip install -r requirements.txt

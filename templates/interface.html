@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interface d'Analyse Cartographique</title>
+    <link rel="stylesheet" href="static/css/style.css">
+</head>
+<body>
+
+<header>
+    <div class="logo-container">
+        <img src="/image/logo.png" alt="Logo SIPPEREC">
+    </div>
+    <h1>Interface d'Analyse Cartographique  Grace THD</h1>
+    
+    <div class="logout-container">
+        <a href="{{ url_for('logout') }}" class="btn-logout">Déconnexion</a>
+    </div>
+</header>
+
+<main>
+    <div class="container">
+        <!-- Section pour l'analyse d'un export à une date donnée -->
+        <section class="section">
+            <h2>Analyse d'un Export à une Date Donnée</h2>
+            <form id="single-export-form" method="POST" enctype="multipart/form-data">
+                <div class="file-input-container">
+                    <input type="file" id="file-input-single" webkitdirectory directory multiple>
+                    <label for="file-input-single">Sélectionner un dossier (Export)</label>
+                    <div id="selected-file-single" class="selected-file">Aucun dossier sélectionné</div>
+                    <ul id="file-list-single" class="file-list"></ul>
+                </div>
+                <div class="date-selector">
+                    <label for="export-date-single">Date de l'Export :</label>
+                    <input type="month" id="export-date-single" class="export-date-input" name="export-date-single">
+
+                </div>
+                
+                
+                <button type="button" id="upload-btn-single" class="btn-import-green">Importer</button>
+                <span id="loading-indicator-single" style="display: none;">Chargement en cours...</span>
+                    
+            </form>
+
+               <!-- Nouveaux boutons ajoutés -->
+               <div class="button-container">
+                
+                <!-- Arborescence Livrable -->
+                <form action="/arborescence_livrable" method="POST">
+                    <input type="hidden" id="hidden-export-date" name="export_date">
+                    <button type="submit">Arborescence Livrable</button>
+                </form>
+
+                <!-- Présence Champ CSV -->
+                <form action="/presence_champ_csv" method="POST">
+                    <input type="hidden" id="hidden-export-date-csv" name="export_date">
+                    <button type="submit">Présence Champ CSV</button>
+                </form>
+
+                <form action="/analyze_bpe" method="POST">
+                    <input type="hidden" id="hidden-export-date" name="export_date">
+                    <button type="submit" id="analyze-bpe">Analyser BPE</button>
+                </form>
+            
+                <form action="/analyze_cable" method="POST">
+                    <input type="hidden" id="hidden-export-date-cable" name="export_date">
+                    <button type="submit" id="analyze-cable">Analyser Cable</button>
+                </form>
+            
+                <form action="/analyze_chambre" method="POST">
+                    <input type="hidden" id="hidden-export-date-chambre" name="export_date">
+                    <button type="submit" id="analyze-chambre">Analyser Chambre</button>
+                </form>
+            
+                <form id="form-analyze-fourreaux">
+                    <input type="hidden" id="hidden-export-date-fourreaux" name="export_date">
+                    <button type="button" id="analyze-fourreaux">Analyser Fourreau</button>
+                </form>
+            </div>
+                
+            
+            <div id="results-single" class="result-container">
+                <h3>Résultats de l'Analyse</h3>
+                <div id="table-results-single"></div>
+                <a id="download-results-single" class="btn-download btn-download-green" href="#">Télécharger les Résultats</a>
+
+            </div>
+        </section>
+       
+        <section class="section">
+            <h2>Importer et Analyser Deux Exports</h2>
+            <form id="comparison-import-form" method="POST" enctype="multipart/form-data">
+                <div class="file-input-container">
+                    <h3>Ancien Export</h3>
+                    <input type="file" id="file-input-old" webkitdirectory directory multiple>
+                    <label for="file-input-old">Sélectionner un dossier (Ancien Export)</label>
+                    <div id="selected-file-old" class="selected-file">Aucun dossier sélectionné</div>
+                    <ul id="file-list-old" class="file-list"></ul>
+                    <label for="export-date-old">Date de l'Export:</label>
+                    <input type="month" id="export-date-old" name="export-date-old">
+                </div>
+        
+                <div class="file-input-container">
+                    <h3>Nouveau Export</h3>
+                    <input type="file" id="file-input-new" webkitdirectory directory multiple>
+                    <label for="file-input-new">Sélectionner un dossier (Nouveau Export)</label>
+                    <div id="selected-file-new" class="selected-file">Aucun dossier sélectionné</div>
+                    <ul id="file-list-new" class="file-list"></ul>
+                    <label for="export-date-new">Date de l'Export:</label>
+                    <input type="month" id="export-date-new" name="export-date-new">
+                </div>
+            </form>
+            <div>
+                <button type="button" id="upload-btn-different-version" class="btn-import-green">Importer les Deux Exports</button>
+                <span id="loading-indicator-different-version" style="display: none;">Chargement en cours...</span>
+            </div>
+        
+            <!-- Ajout des boutons pour comparer -->
+            <div class="export-analysis-buttons">
+                <h2>Comparer les Exports</h2>
+                <div class="button-container">
+                    <form action="/compare_ebp" method="POST"></form>
+                        <input type="hidden" id="hidden-comparison-date-bpe-old" name="old_date">
+                        <input type="hidden" id="hidden-comparison-date-bpe-new" name="new_date">
+                        <button type="button" id="compare-ebp-btn" class="btn-export-analysis">Comparer EBP</button>
+                    </form>
+                    
+        
+                    <form action="/compare_cable" method="POST">
+                        <input type="hidden" id="hidden-comparison-date-cable-old" name="old_date">
+                        <input type="hidden" id="hidden-comparison-date-cable-new" name="new_date">
+                        <button type="button" id="compare-cable-btn" class="btn-export-analysis">Comparer Cable</button>
+                    </form>
+                    
+        
+                    <form action="/compare_PointTechnique" method="POST">
+                        <input type="hidden" id="hidden-comparison-date-PointTechnique-old" name="old_date">
+                        <input type="hidden" id="hidden-comparison-date-PointTechnique-new" name="new_date">
+                        <button type="button" id="compare-PointTechnique-btn" class="btn-export-analysis">Comparer Point Technique</button>
+                    </form>
+                    
+        
+                    <form action="/compare_cheminement">
+                        <input type="hidden" id="hidden-comparison-date-cheminement-old" name="old_date">
+                        <input type="hidden" id="hidden-comparison-date-cheminement-new" name="new_date">
+                        <button type="button" id="compare-cheminement-btn" class="btn-export-analysis">Comparer Cheminement</button>
+                    </form>
+
+                    <form action="/compare_site_technique" method="POST">
+                        <input type="hidden" id="hidden-comparison-date-site-technique-old" name="old_date">
+                        <input type="hidden" id="hidden-comparison-date-site-technique-new" name="new_date">
+                        <button type="button" id="compare-site-technique-btn" class="btn-export-analysis">Comparer Site Technique</button>
+                    </form>
+                    
+                    
+                </div>
+            </div>
+
+
+        
+            <div id="results-comparison" class="result-container">
+                <h3>Résultats de la Comparaison</h3>
+                <div id="table-results-comparison"></div>
+                <a id="download-results-comparison" class="btn-download btn-download-green" href="#">Télécharger les Résultats</a>
+
+            </div>
+
+            <section class="section">
+                <h2>Analyse logique - Référence des points du réseau</h2>
+                
+                <div class="button-container">
+                    <form id="form-analyze-t-baie">
+                        <input type="hidden" id="hidden-export-date-t-baie" name="export_date">
+                        <button type="button" id="analyze-t-baie">Analyser t_baie</button>
+                    </form>
+            
+                    <form id="form-analyze-t-cab-cond">
+                        <input type="hidden" id="hidden-export-date-t-cab-cond" name="export_date">
+                        <button type="button" id="analyze-t-cab-cond">Analyser t_cab_cond</button>
+                    </form>
+
+                    <form id="form-analyze-t-cassette">
+                        <input type="hidden" id="hidden-export-date-t-cassette" name="export_date">
+                        <button type="button" id="analyze-t-cassette">Analyser t_cassette</button>
+                    </form>
+
+                    <form id="form-analyze-cheminement">
+                        <input type="hidden" id="hidden-export-date-cheminement" name="export_date">
+                        <button type="button" id="analyze-cheminement">Analyser t_cheminement</button>
+                      </form>
+                      
+                    <form id="form-analyze-t-cond-chem">
+                        <input type="hidden" id="hidden-export-date-t-cond-chem" name="export_date">
+                        <button type="button" id="analyze-t-cond-chem">Analyser t_cond_chem</button>
+                    </form>
+                    
+                    <form id="form-analyze-coherence-cable">
+                        <input type="hidden" id="hidden-export-date-coherence-cable" name="export_date">
+                        <button type="button" id="analyze-coherence-cable">Analyser coherence câble</button>
+                    </form>
+
+                    <form id="form-analyze-conduite-organisme">
+                        <input type="hidden" id="hidden-export-date-conduite-organisme" name="export_date">
+                        <button type="button" id="analyze-conduite-organisme">Analyser t_conduite → t_organisme</button>
+                    </form>
+
+                    <form id="form-analyze-ebp">
+                        <input type="hidden" id="hidden-export-date-ebp" name="export_date">
+                        <button type="button" id="analyze-ebp">Analyser t_ebp</button>
+                    </form>
+                    
+                    <form id="form-analyze-fibre-cable">
+                        <input type="hidden" id="hidden-export-date-fibre-cable" name="export_date">
+                        <button type="button" id="analyze-fibre-cable">Analyser t_fibre → t_cable</button>
+                      </form>
+                      
+                      <form id="form-analyze-position">
+                        <input type="hidden" name="export_date" id="hidden-export-date-position">
+                        <button type="button" id="analyze-position">Analyser position</button>
+                      </form>
+                      <form id="form-analyze-ltech">
+                        <input type="hidden" id="hidden-export-date-ltech" name="export_date">
+                        <button type="button" id="analyze-ltech">Analyser t_ltech</button>
+                      </form>
+                                            
+                      <form id="form-analyze-ptech">
+                        <input type="hidden" id="hidden-export-date-ptech" name="export_date">
+                        <button type="button" id="analyze-ptech">Analyser p_ptech</button>
+                      </form>
+                      
+                      <form id="form-analyze-ropt">
+                        <input type="hidden" id="hidden-export-date-ropt" name="export_date">
+                        <button type="button" id="analyze-ropt">Analyser t_ropt</button>
+                      </form>
+                      
+                      <form id="form-analyze-sitetech">
+                        <input type="hidden" id="hidden-export-date-sitetech" name="export_date">
+                        <button type="button" id="analyze-sitetech">Analyser t_sitetech</button>
+                      </form>
+                      
+                      <form id="form-analyze-suf">
+                        <input type="hidden" id="hidden-export-date-suf" name="export_date">
+                        <button type="button" id="analyze-suf">Analyser t_suf</button>
+                      </form>
+                      
+                      <form id="form-analyze-tiroir">
+                        <input type="hidden" id="hidden-export-date-tiroir" name="export_date">
+                        <button type="button" id="analyze-tiroir">Analyser t_tiroir</button>
+                      </form>
+                      
+                      <form id="form-analyze-cableline">
+                        <input type="hidden" id="hidden-export-date-cableline" name="export_date">
+                        <button type="button" id="analyze-cableline">Analyser t_cableline</button>
+                      </form>
+                      
+                      <form id="form-analyze-noeud">
+                        <input type="hidden" id="hidden-export-date-noeud" name="export_date">
+                        <button type="button" id="analyze-noeud">Analyser t_noeud</button>
+                      </form>
+                      
+                </div>
+            
+                <!-- Section partagée des résultats et des boutons de téléchargement -->
+                <div id="results-section" class="result-container">
+                    <h3 id="analysis-title">Résultats de l'Analyse</h3>
+                    <div id="table-results"></div>
+                    <iframe id="results-html-frame" style="width: 100%; height: 500px; border: none; display: none;"></iframe>
+                    <a id="download-results-csv" class="btn-download btn-download-green" href="#" style="display: none;">Télécharger CSV</a>
+                    <a id="download-results-html" class="btn-download btn-download-green" href="#" style="display: none;">Télécharger HTML</a>
+                </div>
+            </section>
+
+        </section>
+        
+                
+  
+    </div>
+</main>
+
+<script src="static/js/script.js"></script>
+
+</body>
+</html>
