@@ -1,0 +1,13 @@
+DO $$
+DECLARE
+    tbl record;
+BEGIN
+    FOR tbl IN 
+        SELECT schemaname, tablename
+        FROM pg_tables
+        WHERE tablename LIKE '%2023-08%'
+    LOOP
+        EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(tbl.schemaname) || '.' || quote_ident(tbl.tablename) || ' CASCADE';
+        RAISE NOTICE 'Table supprimée: %.%', tbl.schemaname, tbl.tablename;
+    END LOOP;
+END $$;

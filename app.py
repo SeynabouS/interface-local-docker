@@ -1,4 +1,7 @@
-from flask import Flask, request, jsonify, render_template, redirect, send_from_directory, url_for, session, flash
+from flask import Flask, request, jsonify, render_template, redirect, send_from_directory, url_for, session, flash,  send_file
+from werkzeug.utils import secure_filename
+import geopandas as gpd
+from geoalchemy2 import Geometry
 from flask_sqlalchemy import SQLAlchemy
 import os
 import pandas as pd
@@ -19,7 +22,13 @@ from functools import wraps
 from dotenv import load_dotenv
 import traceback
 from datetime import datetime
-
+import zipfile
+import io
+import os
+from zipfile import ZipFile
+import os, tempfile, requests
+from flask import jsonify, request
+from zipfile import ZipFile
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")
@@ -32,8 +41,11 @@ username = urllib.parse.quote_plus(os.getenv("DB_USERNAME"))
 password = urllib.parse.quote_plus(os.getenv("DB_PASSWORD"))
 host = os.getenv("DB_HOST")
 dbname = os.getenv("DB_NAME")
+port = "5433"
 
-app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql://{username}:{password}@{host}/{dbname}?options=-csearch_path=gracethd'
+app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql://{username}:{password}@{host}:{port}/{dbname}?options=-csearch_path=gracethd'
+#app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql://{username}:{password}@{host}:{port}/{dbname}'
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialisation de la base de données
@@ -43,6 +55,7 @@ engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
 # Modèle utilisateur
 class User(db.Model):
     __tablename__ = 'users'
+    __table_args__ = {'schema': 'gracethd'}
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
@@ -172,10 +185,44 @@ def read_file_generic(file_path):
     # Si aucun encodage ne fonctionne
     raise ValueError(f"Erreur lors de la lecture du fichier {file_path}: Aucun encodage valide trouvé.")
 
+
+    """
+    Essaye de lire un fichier quel que soit son format avec Pandas.
+    """
+    possible_encodings = ['ISO-8859-1', 'utf-8', 'utf-8-sig', 'latin1', 'cp1252', 'ansi']
+    encoding = detect_encoding(file_path)
+    possible_encodings.insert(0, encoding)  # Ajouter l'encodage détecté en premier
+
+    for enc in possible_encodings:
+        try:
+            if file_path.endswith('.csv'):
+                sep = detect_separator(file_path, enc)
+                return pd.read_csv(file_path, encoding=enc, low_memory=False, on_bad_lines='skip', quoting=csv.QUOTE_NONE, sep=sep, escapechar='\\')
+            elif file_path.endswith('.xlsx'):
+                return pd.read_excel(file_path, engine='openpyxl')
+            elif file_path.endswith('.json'):
+                with open(file_path, 'r', encoding=enc) as f:
+                    data = json.load(f)
+                return pd.json_normalize(data)
+            elif file_path.endswith('.dbf'):
+                table = DBF(file_path, encoding=enc)
+                return pd.DataFrame(iter(table))
+            else:
+                # Pour les fichiers binaires ou non tabulaires, lire le contenu brut
+                with open(file_path, 'rb') as f:
+                    content = f.read()
+                    return pd.DataFrame({'file_name': [os.path.basename(file_path)], 'content': [base64.b64encode(content).decode('utf-8')]})
+        except UnicodeDecodeError:
+            logging.warning(f"Erreur d'encodage avec {enc}, tentative avec un autre encodage...")
+        except Exception as e:
+            logging.error(f"Erreur lors de la lecture du fichier {file_path} avec encodage {enc}: {str(e)}")
+
+    # Si aucun encodage ne fonctionne
+    raise ValueError(f"Erreur lors de la lecture du fichier {file_path}: Aucun encodage valide trouvé.")
+
 @app.route('/image/<path:filename>')
 def serve_image(filename):
     return send_from_directory('image', filename)
-
 
 
 @app.route('/upload', methods=['POST'])
@@ -219,7 +266,7 @@ def upload_files():
                 
                 # Importer les données dans PostgreSQL, même si df est vide
                 df.columns = df.columns.astype(str)  # Assurer que tous les noms de colonnes sont des chaînes de caractères
-                df.to_sql(table_name, engine, index=False, if_exists='replace')
+                df.to_sql(table_name, engine, schema='gracethd', index=False, if_exists='replace')
                 
                 # Enregistrer l'information sur l'export dans la base de données
                 new_export = Export(export_date=export_date, file_name=file_name, table_name=table_name)
@@ -246,7 +293,6 @@ def upload_files():
 if __name__ == '__main__':
     create_tables()  # Assurer que les tables sont créées avant de lancer l'application
     app.run(debug=True)
-
 
 @app.route('/arborescence_livrable', methods=['POST'])
 def arborescence_livrable():
@@ -658,6 +704,7 @@ def analyze_chambre():
         logging.error(f"Erreur lors de l'analyse des chambres techniques : {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+
 @app.route('/analyze_fourreaux', methods=['POST'])
 def analyze_fourreaux():
     try:
@@ -773,6 +820,7 @@ def analyze_fourreaux():
         logging.error(f"Erreur lors de l'analyse des fourreaux : {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+
 @app.route('/upload_different_version', methods=['POST'])
 def upload_different_version():
     try:
@@ -827,7 +875,8 @@ def upload_different_version():
 
                     # Insertion dans PostgreSQL
                     df.columns = df.columns.astype(str)  # S'assurer que les colonnes sont des chaînes
-                    df.to_sql(table_name, engine, index=False, if_exists='replace')
+                    df.to_sql(table_name, engine, schema='gracethd', index=False, if_exists='replace')
+
                     logging.info(f"Table {table_name} créée ou mise à jour dans la base de données.")
 
                     # Enregistrer l'information sur l'export dans la base de données
@@ -849,6 +898,7 @@ def upload_different_version():
     except Exception as e:
         logging.error(f"Erreur serveur : {str(e)}")
         return jsonify({"message": f"Erreur serveur : {str(e)}"}), 500
+
 
 def read_file_generic_with_ansi(file_path):
     """
@@ -1133,7 +1183,6 @@ def compare_cable():
     except Exception as e:
         logging.error(f"Erreur lors de la comparaison des câbles : {str(e)}")
         return jsonify({"error": str(e)}), 500
-
 
 
 @app.route('/compare_PointTechnique', methods=['POST'])
@@ -1497,6 +1546,7 @@ def compare_site_technique():
         logging.error(f"Erreur lors de la comparaison des Sites Techniques : {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+
 #nouvelles fonctionnalités logiques terrains
 def read_table(export_date: str, suffix_with_ext: str) -> pd.DataFrame:
     """
@@ -1513,6 +1563,7 @@ def read_table(export_date: str, suffix_with_ext: str) -> pd.DataFrame:
         return pd.read_sql(f'SELECT * FROM "{table1}"', engine)
     except Exception:
         return pd.read_sql(f'SELECT * FROM "{table2}"', engine)
+
 
 @app.route('/analyze_t_baie', methods=['POST'])
 def analyze_t_baie():
@@ -1886,13 +1937,13 @@ def analyze_t_cassette():
 
 
         # unicité
-        total_bp = df_cassette['cs_bp_code'].dropna().shape[0]
+        total_bp = df_cassette['cs_code'].dropna().shape[0]
         total_rf = df_cassette['cs_rf_code'].dropna().shape[0]
 
-        dup_bp = df_cassette[df_cassette.duplicated('cs_bp_code', keep=False)]
+        dup_bp = df_cassette[df_cassette.duplicated('cs_code', keep=False)]
         dup_rf = df_cassette[df_cassette.duplicated('cs_rf_code', keep=False)]
 
-        duplicated_cs_bp = dup_bp['cs_bp_code'].dropna().unique().tolist()
+        duplicated_cs_bp = dup_bp['cs_code'].dropna().unique().tolist()
         duplicated_cs_rf = dup_rf['cs_rf_code'].dropna().unique().tolist()
 
         cs_bp_unique_rate = round((total_bp - len(duplicated_cs_bp)) / total_bp * 100, 2) if total_bp else 100
@@ -1932,7 +1983,7 @@ def analyze_t_cassette():
         with open(csv_path, 'w', newline='', encoding='utf-8') as f:
             w = csv.writer(f, delimiter=';')
             w.writerow([f"Analyse t_cassette", export_date]); w.writerow([])
-            w.writerow(["Unicité", "cs_bp_code", "cs_rf_code"])
+            w.writerow(["Unicité", "cs_code", "cs_rf_code"])
             w.writerow(["Taux (%)", f"{cs_bp_unique_rate}%", f"{cs_rf_unique_rate}%"])
             w.writerow([
                 "Doublons",
@@ -1972,7 +2023,7 @@ def analyze_t_cassette():
   <table>
     <tr><th>Colonne</th><th>Taux (%)</th><th>Doublons</th></tr>
     <tr>
-      <td>cs_bp_code</td><td>{cs_bp_unique_rate}%</td>
+      <td>cs_code</td><td>{cs_bp_unique_rate}%</td>
       <td>{render_list_with_toggle(duplicated_cs_bp)}</td>
     </tr>
     <tr>
@@ -2042,6 +2093,7 @@ def analyze_t_cassette():
             "traceback": traceback.format_exc()
         }), 500
 
+
 #cohérence t_cheminement
 @app.route('/analyze_cheminement', methods=['POST'])
 def analyze_cheminement():
@@ -2074,6 +2126,13 @@ def analyze_cheminement():
         df_org['or_code']   = df_org['or_code'].astype(str).str.strip().str.lower()
 
         total = len(df_ch)
+
+        # Analyse d'unicité pour cm_code
+        df_ch['cm_code'] = df_ch['cm_code'].astype(str).str.strip().replace({'nan':'','none':''})
+        total_cm = df_ch['cm_code'].dropna().shape[0]
+        dup_cm = df_ch[df_ch.duplicated('cm_code', keep=False)]
+        duplicated_cm_code = dup_cm['cm_code'].dropna().unique().tolist()
+        cm_code_unique_rate = round((total_cm - len(duplicated_cm_code)) / total_cm * 100, 2) if total_cm else 100
 
         # 4) Remplissage cm_ndcode1 & cm_ndcode2
         def fill_stats(col):
@@ -2113,6 +2172,10 @@ def analyze_cheminement():
             "export_date":      export_date,
             "total_rows":       total,
 
+            "total_cm": total_cm,
+            "cm_code_unique_rate": cm_code_unique_rate,
+            "duplicated_cm_code": duplicated_cm_code,
+
             "f1":                f1, "p1": p1, "m1": m1, "c1": c1, "q1": q1,
             "f2":                f2, "p2": p2, "m2": m2, "c2": c2, "q2": q2,
 
@@ -2122,6 +2185,7 @@ def analyze_cheminement():
             "missing_ce":       missing_ce,
             "cnt_ce":           cnt_ce,
             "pct_ce":           pct_ce
+
         }
 
         # 8) numpy → natifs
@@ -2151,6 +2215,8 @@ def analyze_cheminement():
             w.writerow(["cm_gest_do",    ", ".join(mg[:10])    or "Aucun"])
             w.writerow(["cm_prop_do",    ", ".join(mp[:10])    or "Aucun"])
             w.writerow(["cm_codeext",    ", ".join(missing_ce[:10]) or "Aucun"])
+            w.writerow(["cm_code unicité (%)", f"{total_cm} codes", f"{cm_code_unique_rate}% uniques – doublons: {', '.join(duplicated_cm_code[:10]) or 'Aucun'}"])
+
         result["csv_path"] = f"/static/exports/{csv_fn}"
 
         # 10) Export HTML
@@ -2175,6 +2241,7 @@ th{{background:#f2f2f2}}.voir-plus{{color:blue;cursor:pointer;text-decoration:un
 </style></head><body>
   <h1>Analyse t_cheminement – {export_date}</h1>
   <table>
+
     <tr><th>Test</th><th>Remplis/Total (%)</th><th>Invalids/Total (%)</th></tr>
     <tr><td>cm_ndcode1</td><td>{f1}/{total} ({p1}%)</td><td>{c1}/{total} ({q1}%)</td></tr>
     <tr><td>cm_ndcode2</td><td>{f2}/{total} ({p2}%)</td><td>{c2}/{total} ({q2}%)</td></tr>
@@ -2190,6 +2257,15 @@ th{{background:#f2f2f2}}.voir-plus{{color:blue;cursor:pointer;text-decoration:un
     <tr><td>cm_gest_do</td><td>{render_list(mg)}</td></tr>
     <tr><td>cm_prop_do</td><td>{render_list(mp)}</td></tr>
     <tr><td>cm_codeext</td><td>{render_list(missing_ce)}</td></tr>
+  </table>
+  <h2>Unicité de cm_code</h2>
+  <table>
+    <tr><th>Total</th><th>Taux (%)</th><th>Doublons</th></tr>
+    <tr>
+      <td>{total_cm}</td>
+      <td>{cm_code_unique_rate}%</td>
+      <td>{render_list(duplicated_cm_code)}</td>
+    </tr>
   </table>
 </body></html>""")
         result["html_path"] = f"/static/exports/{html_fn}"
@@ -2428,6 +2504,7 @@ def analyze_t_cond_chem():
             "traceback": traceback.format_exc()
         }), 500
 
+
 #logique cohérence table cable
 @app.route('/analyze_coherence_cable', methods=['POST'])
 def analyze_coherence_cable():
@@ -2469,13 +2546,21 @@ def analyze_coherence_cable():
         incoherents_fo_html = ""
         if not incoherents_fo.empty:
             for _, row in incoherents_fo.iterrows():
-                incoherents_fo_html += f"<tr><td>{row['cb_fo_disp']}</td><td>{row['cb_fo_util']}</td><td>{row['cb_capafo']}</td><td>{row['sum_disp_util']}</td></tr>"
+                cb_code = row.get('cb_code', 'Inconnu')
+                incoherents_fo_html += f"<tr><td>{cb_code}</td><td>{row['cb_fo_disp']}</td><td>{row['cb_fo_util']}</td><td>{row['cb_capafo']}</td><td>{row['sum_disp_util']}</td></tr>"
 
 
         # Vérif 3 : cb_codeext in ["territoire", "hors territoire"]
         valid_values = {"territoire", "hors territoire"}
         cb_codeext_invalides = df_cable[~df_cable['cb_codeext'].isin(valid_values)]
 
+        # Vérif 4 : unicité de cb_code
+        # Nettoyage explicite cb_code
+        df_cable['cb_code'] = df_cable['cb_code'].astype(str).str.strip().replace({'nan': '', 'none': ''})
+        total_cb_code = df_cable['cb_code'].dropna().shape[0]
+        dup_cb_code = df_cable[df_cable.duplicated('cb_code', keep=False)]
+        duplicated_cb_code = dup_cb_code['cb_code'].dropna().unique().tolist()
+        cb_code_unique_rate = round((total_cb_code - len(duplicated_cb_code)) / total_cb_code * 100, 2) if total_cb_code else 100
         # Résultat
         result = {
             "status": "success",
@@ -2485,7 +2570,11 @@ def analyze_coherence_cable():
             "cb_user_non_trouve": list(map(str, non_trouve_cb_user)),
             "nb_incoherents_fo": len(incoherents_fo),
             "nb_cb_codeext_invalides": cb_codeext_invalides.shape[0],
-            "incoherents_fo_html": incoherents_fo_html
+            "incoherents_fo_html": incoherents_fo_html,
+            "total_cb_code": total_cb_code,
+            "cb_code_unique_rate": cb_code_unique_rate,
+            "duplicated_cb_code": duplicated_cb_code
+
         }
 
         # Export
@@ -2507,9 +2596,19 @@ def analyze_coherence_cable():
             writer.writerow([])
             writer.writerow(["Vérification cb_fo_disp + cb_fo_util = cb_capafo"])
             writer.writerow(["Nombre d'incohérences", result["nb_incoherents_fo"]])
+            writer.writerow(["cb_code", "cb_fo_disp", "cb_fo_util", "cb_capafo", "Somme disp+util"])
+            for _, row in incoherents_fo.iterrows():
+                cb_code = row.get("cb_code", "Inconnu")
+                writer.writerow([cb_code, row['cb_fo_disp'], row['cb_fo_util'], row['cb_capafo'], row['sum_disp_util']])
             writer.writerow([])
             writer.writerow(["Vérification cb_codeext"])
             writer.writerow(["Nombre de valeurs invalides", result["nb_cb_codeext_invalides"]])
+            writer.writerow([])
+            writer.writerow(["Unicité de cb_code"])
+            writer.writerow(["Total", total_cb_code])
+            writer.writerow(["Taux unique (%)", f"{cb_code_unique_rate}%"])
+            writer.writerow(["Doublons (max 10)", ", ".join(duplicated_cb_code[:10]) or "Aucun"])
+
 
         # HTML
         html_filename = f"Analyse_Cable_{export_date}_{timestamp}.html"
@@ -2552,9 +2651,33 @@ def analyze_coherence_cable():
 
     <h2>2. Incohérences cb_fo_disp + cb_fo_util ≠ cb_capafo</h2>
     <p>Nombre de lignes incohérentes : <strong>{result["nb_incoherents_fo"]}</strong></p>
+    <table>
+        <thead>
+            <tr>
+                <th>cb_code</th>
+                <th>cb_fo_disp</th>
+                <th>cb_fo_util</th>
+                <th>cb_capafo</th>
+                <th>Somme disp+util</th>
+            </tr>
+        </thead>
+        <tbody>
+            {result["incoherents_fo_html"]}
+        </tbody>
+    </table>
 
     <h2>3. Valeurs incorrectes dans cb_codeext</h2>
     <p>Nombre de lignes avec cb_codeext invalide : <strong>{result["nb_cb_codeext_invalides"]}</strong></p>
+
+    <h2>4. Unicité de cb_code</h2>
+    <table>
+        <tr><th>Total</th><th>Taux (%)</th><th>Doublons</th></tr>
+        <tr>
+            <td>{total_cb_code}</td>
+            <td>{cb_code_unique_rate}%</td>
+            <td>{html_voir_plus(duplicated_cb_code)}</td>
+        </tr>
+    </table>
 </body>
 </html>""")
 
@@ -2569,6 +2692,7 @@ def analyze_coherence_cable():
             "message": str(e),
             "traceback": traceback.format_exc()
         }), 500
+
 
 #cohérence table t_conduite
 @app.route('/analyze_conduite_organisme', methods=['POST'])
@@ -2586,6 +2710,21 @@ def analyze_conduite_organisme():
         # Chargement des tables
         df_conduite = pd.read_sql(f'SELECT * FROM "{table_conduite}"', engine)
         df_organisme = pd.read_sql(f'SELECT * FROM "{table_organisme}"', engine)
+
+        # Analyse unicité cd_code
+        df_conduite['cd_code'] = df_conduite['cd_code'].astype(str).str.strip().replace({'nan':'', 'none':''})
+        total_cd_code = df_conduite['cd_code'].dropna().shape[0]
+        dup_cd_code = df_conduite[df_conduite.duplicated('cd_code', keep=False)]
+        duplicated_cd_code = dup_cd_code['cd_code'].dropna().unique().tolist()
+        cd_code_unique_rate = round((total_cd_code - len(duplicated_cd_code)) / total_cd_code * 100, 2) if total_cd_code else 100
+
+        # Analyse unicité or_code
+        df_organisme['or_code'] = df_organisme['or_code'].astype(str).str.strip().replace({'nan':'', 'none':''})
+        total_or_code = df_organisme['or_code'].dropna().shape[0]
+        dup_or_code = df_organisme[df_organisme.duplicated('or_code', keep=False)]
+        duplicated_or_code = dup_or_code['or_code'].dropna().unique().tolist()
+        or_code_unique_rate = round((total_or_code - len(duplicated_or_code)) / total_or_code * 100, 2) if total_or_code else 100
+
 
         # Normalisation des noms de colonnes et des valeurs
         df_conduite.columns = df_conduite.columns.str.lower().str.strip()
@@ -2609,7 +2748,14 @@ def analyze_conduite_organisme():
             "export_date": export_date,
             "cd_prop_non_trouve": non_trouve_cd_prop,
             "cd_gest_non_trouve": non_trouve_cd_gest,
-            "cd_user_non_trouve": non_trouve_cd_user
+            "cd_user_non_trouve": non_trouve_cd_user,
+            "total_cd_code": total_cd_code,
+            "cd_code_unique_rate": cd_code_unique_rate,
+            "duplicated_cd_code": duplicated_cd_code,
+            "total_or_code": total_or_code,
+            "or_code_unique_rate": or_code_unique_rate,
+            "duplicated_or_code": duplicated_or_code
+
         }
 
         # Export CSV + HTML
@@ -2628,6 +2774,12 @@ def analyze_conduite_organisme():
             writer.writerow(["cd_prop", ", ".join(non_trouve_cd_prop[:10]) or "Aucune"])
             writer.writerow(["cd_gest", ", ".join(non_trouve_cd_gest[:10]) or "Aucune"])
             writer.writerow(["cd_user", ", ".join(non_trouve_cd_user[:10]) or "Aucune"])
+            writer.writerow([])
+            writer.writerow(["Unicité des codes"])
+            writer.writerow(["Champ", "Total", "Taux unique (%)", "Doublons (max 10)"])
+            writer.writerow(["cd_code", total_cd_code, f"{cd_code_unique_rate}%", ", ".join(duplicated_cd_code[:10]) or "Aucun"])
+            writer.writerow(["or_code", total_or_code, f"{or_code_unique_rate}%", ", ".join(duplicated_or_code[:10]) or "Aucun"])
+
 
         # HTML
         html_filename = f"Analyse_Conduite_Organisme_{export_date}_{timestamp}.html"
@@ -2664,6 +2816,13 @@ def analyze_conduite_organisme():
         <tr><td>cd_gest</td><td>{html_voir_plus(non_trouve_cd_gest)}</td></tr>
         <tr><td>cd_user</td><td>{html_voir_plus(non_trouve_cd_user)}</td></tr>
     </table>
+    <table>
+  <thead><tr><th>Champ</th><th>Total</th><th>Taux unique (%)</th><th>Doublons</th></tr></thead>
+  <tbody>
+    <tr><td>cd_code</td><td>{total_cd_code}</td><td>{cd_code_unique_rate}%</td><td>{html_voir_plus(duplicated_cd_code)}</td></tr>
+    <tr><td>or_code</td><td>{total_or_code}</td><td>{or_code_unique_rate}%</td><td>{html_voir_plus(duplicated_or_code)}</td></tr>
+  </tbody>
+</table>
 </body>
 </html>""")
 
@@ -2678,6 +2837,7 @@ def analyze_conduite_organisme():
             "message": str(e),
             "traceback": traceback.format_exc()
         }), 500
+
 
 #cohérence table ebp/baie
 @app.route('/analyze_ebp', methods=['POST'])
@@ -2697,6 +2857,9 @@ def analyze_ebp():
 
         # Chargement des tables
         df_ebp = pd.read_sql(f'SELECT * FROM "{table_ebp}"', engine)
+        # Vérification d’unicité de bp_code
+        duplicated_bp_code = df_ebp[df_ebp.duplicated(subset='bp_code', keep=False)]['bp_code'].dropna().unique().tolist()
+
         df_organisme = pd.read_sql(f'SELECT * FROM "{table_organisme}"', engine)
         df_ptech = pd.read_sql(f'SELECT * FROM "{table_ptech}"', engine)
         df_reference = pd.read_sql(f'SELECT * FROM "{table_reference}"', engine)
@@ -2761,7 +2924,10 @@ def analyze_ebp():
             "invalid_bp_user": invalid_bp_user,
             "invalid_bp_rf_code": invalid_bp_rf_code,
             "bpe_without_cassette": bpe_without_cassette,
-            "bpe_without_cassette_rate": bpe_without_cassette_rate
+            "bpe_without_cassette_rate": bpe_without_cassette_rate,
+            "duplicated_bp_code": duplicated_bp_code,
+            "bp_code_unicity_rate": round((1 - len(duplicated_bp_code) / len(df_ebp['bp_code'].dropna().unique())) * 100, 2) if len(df_ebp['bp_code'].dropna().unique()) else 100
+
         }
         # Nombre total de BPE (pour le ratio)
         result["total_bp_count"] = len(df_ebp['bp_code'].dropna().unique())
@@ -2788,6 +2954,9 @@ def analyze_ebp():
             writer.writerow(["bp_rf_code", ", ".join(invalid_bp_rf_code) or "Aucune"])
             writer.writerow(["BPE sans cassette", ", ".join(bpe_without_cassette) or "Aucune"])
             writer.writerow(["Taux de BPE sans cassette", f"{bpe_without_cassette_rate}%"])
+            writer.writerow(["bp_code non uniques", ", ".join(duplicated_bp_code) or "Aucune"])
+            writer.writerow(["Taux d’unicité de bp_code", f"{result['bp_code_unicity_rate']}%"])
+
 
         # Export HTML
         html_filename = f"Analyse_EBP_{export_date}_{timestamp}.html"
@@ -2820,6 +2989,9 @@ def analyze_ebp():
     <h1>Analyse t_ebp – {export_date}</h1>
     <table>
         <tr><th>Champ</th><th>Incohérences</th></tr>
+        <tr><td>bp_code non uniques</td><td>{html_voir_plus(duplicated_bp_code)}</td></tr>
+        <tr><td>Taux d’unicité de bp_code</td><td>{result['bp_code_unicity_rate']}%</td></tr>
+
         <tr><td>bp_codeext</td><td>{html_voir_plus(invalid_bp_codeext)}</td></tr>
         <tr><td>bp_pt_code</td><td>{html_voir_plus(invalid_bp_pt_code)}</td></tr>
         <tr><td>Taux de remplissage bp_pt_code</td><td>{bp_pt_code_fill_rate}%</td></tr>
@@ -2844,6 +3016,7 @@ def analyze_ebp():
             "message": str(e),
             "traceback": traceback.format_exc()
         }), 500
+
 
 #cohérence fibre
 @app.route('/analyze_fibre_cable', methods=['POST'])
@@ -2897,6 +3070,14 @@ def analyze_fibre_cable():
         success_rate  = round(success_count/total_tested*100,2) if total_tested else 0
         failure_rate  = round(fail_count/total_tested*100,2) if total_tested else 0
 
+        # Analyse de l'unicité de fo_code
+        df_fibre['fo_code'] = df_fibre['fo_code'].astype(str).str.strip().str.lower()
+        total_fibres = df_fibre.shape[0]
+        unique_fo_codes = df_fibre['fo_code'].nunique()
+        duplicate_fo_codes = df_fibre['fo_code'].duplicated(keep=False)
+        fo_code_duplicates = df_fibre.loc[duplicate_fo_codes, 'fo_code'].unique().tolist()
+
+
         # Préparer le résultat
         result = {
             "status": "success",
@@ -2907,7 +3088,10 @@ def analyze_fibre_cable():
             "total_tested": total_tested,
             "failures": failures,
             "success_rate": success_rate,
-            "failure_rate": failure_rate
+            "failure_rate": failure_rate,
+            "total_fibres": total_fibres,
+            "unique_fo_codes": unique_fo_codes,
+            "fo_code_duplicates": fo_code_duplicates
         }
 
         # Export CSV
@@ -2933,6 +3117,13 @@ def analyze_fibre_cable():
                 w.writerow([f_["code"], f_["occurrences"], f_["capafo"]])
             if len(failures)>10:
                 w.writerow(["... et", len(failures)-10, "autres"])
+            w.writerow([])
+            w.writerow(["Analyse unicité fo_code"])
+            w.writerow(["Total fibres", total_fibres])
+            w.writerow(["fo_code uniques", unique_fo_codes])
+            w.writerow(["fo_code en doublon"])
+            w.writerow(fo_code_duplicates[:10] + (["..."] if len(fo_code_duplicates) > 10 else []))
+
         result["csv_path"] = f"/static/exports/{csv_fn}"
 
         # Export HTML
@@ -2965,6 +3156,11 @@ body{{font-family:Arial;margin:20px}}table{{border-collapse:collapse;width:100%}
 th,td{{border:1px solid #ddd;padding:8px}}th{{background:#f2f2f2}}
 .voir-plus{{color:blue;cursor:pointer;text-decoration:underline}}
 </style></head><body>
+            <h2>Unicité des fo_code</h2>
+        <p>Total fibres : <strong>{total_fibres}</strong>, codes uniques : <strong>{unique_fo_codes}</strong></p>
+        <p>{render_list(fo_code_duplicates)}</p>
+
+
   <h1>Analyse t_fibre → t_cable – {export_date}</h1>
   <h2>1. FO_CB_CODE</h2>
   <p>Total : <strong>{total_fo}</strong>, sans correspondance : <strong>{count_non_found}</strong></p>
@@ -2982,6 +3178,7 @@ th,td{{border:1px solid #ddd;padding:8px}}th{{background:#f2f2f2}}
     except Exception as e:
         return jsonify({"status":"error","message":str(e),"traceback":traceback.format_exc()}),500
 
+
 #conhérence table t_position
 @app.route('/analyze_position', methods=['POST'])
 def analyze_position():
@@ -2998,6 +3195,15 @@ def analyze_position():
 
         # Chargement
         df_pos    = pd.read_sql(f'SELECT * FROM "{tbl_pos}"', engine)
+
+        # Analyse d’unicité pour ps_code
+        df_pos['ps_code'] = df_pos['ps_code'].astype(str).str.strip().str.lower()
+        total_ps_code = len(df_pos)
+        unique_ps_code = df_pos['ps_code'].nunique()
+        duplicated_codes = df_pos[df_pos.duplicated('ps_code', keep=False)]['ps_code'].value_counts().reset_index()
+        duplicated_codes.columns = ['ps_code', 'count']
+        dupli_list = duplicated_codes.to_dict(orient='records')
+
         df_fibre  = pd.read_sql(f'SELECT * FROM "{tbl_fibre}"', engine)
         df_cass   = pd.read_sql(f'SELECT * FROM "{tbl_cass}"', engine)
 
@@ -3049,6 +3255,10 @@ def analyze_position():
             "missing_cs": missing_cs,
             "missing_cs_count": int(missing_cs_count),
             "missing_cs_pct": float(missing_cs_pct),
+            "total_ps_code": total_ps_code,
+            "unique_ps_code": unique_ps_code,
+            "duplicated_ps_code": dupli_list
+
         }
 
         for key, val in result.items():
@@ -3066,6 +3276,15 @@ def analyze_position():
         csv_p  = os.path.join(export_dir, csv_fn)
         with open(csv_p,'w',newline='',encoding='utf-8') as f:
             w=csv.writer(f,delimiter=';')
+            w.writerow(["📌 Unicité des ps_code"])
+            w.writerow(["Total ps_code", total_ps_code])
+            w.writerow(["Valeurs uniques", unique_ps_code])
+            w.writerow(["ps_code en doublon", "Occurrences"])
+            for row in dupli_list[:10]:
+                w.writerow([row['ps_code'], row['count']])
+            if len(dupli_list) > 10:
+                w.writerow(["...", "..."])
+            w.writerow([])
             w.writerow([f"Analyse position – {export_date}"])
             w.writerow([])
             w.writerow(["Total de lignes", total_rows])
@@ -3106,6 +3325,16 @@ def analyze_position():
  th{{background:#f2f2f2}}
  .voir-plus{{color:blue;cursor:pointer;text-decoration:underline}}
 </style></head><body>
+<h2>0. Unicité des ps_code</h2>
+<p>Total : <strong>{total_ps_code}</strong> — Uniques : <strong>{unique_ps_code}</strong></p>
+<table>
+  <thead><tr><th>ps_code</th><th>Occurrences</th></tr></thead>
+  <tbody>
+    {''.join(f"<tr><td>{row['ps_code']}</td><td>{row['count']}</td></tr>" for row in dupli_list[:10])}
+    {'<tr><td colspan=2>... autres</td></tr>' if len(dupli_list)>10 else ''}
+  </tbody>
+</table>
+
   <h1>Analyse position – {export_date}</h1>
 
   <h2>1. Taux de remplissage</h2>
@@ -3143,6 +3372,7 @@ def analyze_position():
 
     except Exception as e:
         return jsonify({"status":"error","message":str(e),"traceback":traceback.format_exc()}),500
+
 
 #cohérence table t_ltech
 @app.route('/analyze_ltech', methods=['POST'])
@@ -3200,6 +3430,15 @@ def analyze_ltech():
         user_missing_count = int(df_ltech.loc[~mask_user,'lt_user'].dropna().shape[0])
         user_missing_pct   = round(user_missing_count/total_rows*100, 2) if total_rows else 0
 
+        # --- Analyse unicité lt_code ---
+        df_ltech['lt_code'] = df_ltech['lt_code'].astype(str).str.strip().str.lower()
+        total_lt_code = len(df_ltech)
+        unique_lt_code = df_ltech['lt_code'].nunique()
+        duplicated_lt_codes = df_ltech[df_ltech.duplicated('lt_code', keep=False)]['lt_code'].value_counts().reset_index()
+        duplicated_lt_codes.columns = ['lt_code', 'count']
+        dupli_lt_list = duplicated_lt_codes.to_dict(orient='records')
+
+
         # préparer le résultat
         result = {
             "status": "success",
@@ -3221,6 +3460,11 @@ def analyze_ltech():
             "user_missing_count": user_missing_count,
             "user_missing_pct": user_missing_pct,
             "user_missing_list": user_missing_list,
+
+            "total_lt_code": total_lt_code,
+            "unique_lt_code": unique_lt_code,
+            "duplicated_lt_code": dupli_lt_list
+
         }
 
         # convertir numpy types en natifs
@@ -3251,6 +3495,16 @@ def analyze_ltech():
             w.writerow(["lt_prop",    prop_missing_count, f"{prop_missing_pct}%"])
             w.writerow(["lt_gest",    gest_missing_count, f"{gest_missing_pct}%"])
             w.writerow(["lt_user",    user_missing_count, f"{user_missing_pct}%"])
+            w.writerow([])
+            w.writerow(["📌 Unicité des lt_code"])
+            w.writerow(["Total lt_code", total_lt_code])
+            w.writerow(["Valeurs uniques", unique_lt_code])
+            w.writerow(["lt_code en doublon", "Occurrences"])
+            for row in dupli_lt_list[:10]:
+                w.writerow([row['lt_code'], row['count']])
+            if len(dupli_lt_list) > 10:
+                w.writerow(["...", "..."])
+
         result["csv_path"] = f"/static/exports/{csv_fn}"
 
         # HTML
@@ -3281,6 +3535,16 @@ def analyze_ltech():
  th {{background:#f2f2f2}}
  .voir-plus {{color:blue;cursor:pointer;text-decoration:underline}}
 </style></head><body>
+  <h2>Unicité des lt_code</h2>
+  <p>Total : <strong>{total_lt_code}</strong> — Uniques : <strong>{unique_lt_code}</strong></p>
+  <table>
+    <thead><tr><th>lt_code</th><th>Occurrences</th></tr></thead>
+    <tbody>
+      {''.join(f"<tr><td>{r['lt_code']}</td><td>{r['count']}</td></tr>" for r in dupli_lt_list[:10])}
+      {"<tr><td colspan='2'>... autres</td></tr>" if len(dupli_lt_list) > 10 else ''}
+    </tbody>
+  </table>
+
   <h1>Analyse t_ltech – {export_date}</h1>
    <table>
     <tr><th>Champ</th><th>Manquants/Total</th><th>Pourcentage</th></tr>
@@ -3328,6 +3592,7 @@ def analyze_ltech():
     except Exception:
         return pd.read_sql(f'SELECT * FROM "{table2}"', engine)
 
+
 #cohérence table t_ptech
 @app.route('/analyze_ptech', methods=['POST'])
 def analyze_ptech():
@@ -3357,6 +3622,21 @@ def analyze_ptech():
         df_addr['ad_code'] = df_addr['ad_code'].astype(str).str.strip().str.lower()
 
         total = len(df)
+
+        unicite = {
+            "total": total,
+            "remplis": 0,
+            "uniques": 0,
+            "doublons": [],
+        }
+        if 'pt_code' in df.columns:
+            df['pt_code'] = df['pt_code'].astype(str).str.strip().str.lower()
+            unicite["remplis"]  = df['pt_code'].replace({'nan':'','none':''}).map(lambda x: x!='').sum()
+            unicite["uniques"]  = df['pt_code'].loc[lambda s: s != ''].nunique()
+            counts              = df['pt_code'].value_counts()
+            unicite["doublons"] = counts[counts > 1].index[:10].tolist()
+        else:
+            unicite["erreur"] = "Colonne pt_code absente"
 
         # 1) PT_CODEEXT
         valid_ext     = {"TERRITOIRE", "HORS TERRITOIRE"}
@@ -3394,6 +3674,7 @@ def analyze_ptech():
         ad_bad_count = int((~mask_ad).sum())
         ad_bad_pct   = round(ad_bad_count / total * 100, 2) if total else 0
 
+        
         # Résultat
         result = {
             "status":       "success",
@@ -3425,7 +3706,9 @@ def analyze_ptech():
 
             "ad_bad":         ad_bad,
             "ad_bad_count":   ad_bad_count,
-            "ad_bad_pct":     ad_bad_pct
+            "ad_bad_pct":     ad_bad_pct,
+            "unicite_pt_code" : unicite
+
         }
 
         # Conversion numpy → natifs
@@ -3451,6 +3734,14 @@ def analyze_ptech():
             w.writerow(["pt_user invalides", user_cnt, f"{user_pct}%"])
             w.writerow(["pt_nature vides", nat_empty, f"{round(nat_empty/total*100,2)}%"])
             w.writerow(["pt_ad_code invalides", ad_bad_count, f"{ad_bad_pct}%"])
+            w.writerow([])
+            w.writerow(["Analyse unicité – pt_code"])
+            w.writerow(["Total lignes", unicite["total"]])
+            w.writerow(["Valeurs remplies", unicite["remplis"]])
+            w.writerow(["Valeurs uniques", unicite["uniques"]])
+            w.writerow(["Doublons (max 10)", ", ".join(unicite.get("doublons", [])) or "Aucun"])
+            w.writerow([])
+
         result["csv_path"]=f"/static/exports/{fn}"
 
         # export HTML
@@ -3469,6 +3760,14 @@ def analyze_ptech():
 th,td{{border:1px solid #ddd;padding:8px}}th{{background:#f2f2f2}}
 .voir-plus{{color:blue;cursor:pointer;text-decoration:underline}}
 </style></head><body>
+<h2>Unicité de pt_code</h2>
+<p>
+  Total : <strong>{unicite['total']}</strong><br>
+  Remplis : <strong>{unicite['remplis']}</strong><br>
+  Uniques : <strong>{unicite['uniques']}</strong><br>
+  Doublons : {render(unicite.get('doublons', []))}
+</p>
+
 <h1>Analyse t_ptech – {export_date}</h1>
 <table>
 <tr><th>Test</th><th>Bad/Total</th><th>%</th></tr>
@@ -3493,10 +3792,27 @@ th,td{{border:1px solid #ddd;padding:8px}}th{{background:#f2f2f2}}
 </body></html>""")
         result["html_path"]=f"/static/exports/{fn2}"
 
+        for k, v in result.items():
+            if isinstance(v, np.integer):
+                result[k] = int(v)
+            elif isinstance(v, np.floating):
+                result[k] = float(v)
+            elif isinstance(v, np.ndarray):
+                result[k] = v.tolist()
+            elif isinstance(v, dict):
+                for kk, vv in v.items():
+                    if isinstance(vv, np.integer):
+                        v[kk] = int(vv)
+                    elif isinstance(vv, np.floating):
+                        v[kk] = float(vv)
+                    elif isinstance(vv, np.ndarray):
+                        v[kk] = vv.tolist()
+
         return jsonify(result)
 
     except Exception as e:
         return jsonify({"status":"error","message":str(e),"traceback":traceback.format_exc()}),500
+
 
 #coherence table t_ropt
 @app.route('/analyze_ropt', methods=['POST'])
@@ -3507,15 +3823,13 @@ def analyze_ropt():
         if not export_date:
             return jsonify({"error": "Date d'export non spécifiée"}), 400
 
-        # chargement avec fallback .csv/.dbf
+        # Chargement
         df_ropt  = read_table(export_date, 't_ropt.csv')
         df_fibre = read_table(export_date, 't_fibre.csv')
 
-        # normalisation colonnes
+        # Normalisation
         for d in (df_ropt, df_fibre):
             d.columns = d.columns.str.lower().str.strip()
-
-        # normalisation valeurs
         df_ropt['rt_fo_code']   = df_ropt['rt_fo_code'].astype(str).str.strip().str.lower()
         df_ropt['rt_code']      = df_ropt['rt_code'].astype(str).str.strip().str.lower()
         df_ropt['rt_code_ext']  = df_ropt['rt_code_ext'].astype(str).str.strip().str.lower()
@@ -3523,70 +3837,86 @@ def analyze_ropt():
 
         total = len(df_ropt)
 
-        # 1) existence de rt_fo_code dans t_fibre.fo_code
-        mask_fo      = df_ropt['rt_fo_code'].isin(df_fibre['fo_code'])
-        fo_missing   = df_ropt.loc[~mask_fo, 'rt_fo_code'].dropna().unique().tolist()
-        fo_missing_count = int((~mask_fo).sum())
+        # Test 1) Unicité de rt_id
+        unique_rt_id = df_ropt['rt_id'].astype(str).str.strip().nunique()
+        duplicate_count = total - unique_rt_id
+        duplicate_pct = round(duplicate_count / total * 100, 2) if total else 0
+
+        # Test 2) rt_fo_code présent dans t_fibre.fo_code
+        mask_fo        = df_ropt['rt_fo_code'].isin(df_fibre['fo_code'])
+        fo_missing     = df_ropt.loc[~mask_fo, 'rt_fo_code'].dropna().unique().tolist()
+        fo_missing_count = (~mask_fo).sum()
         fo_missing_pct   = round(fo_missing_count / total * 100, 2) if total else 0
 
-        # 2) rt_code_ext remplissage + correspondance avec rt_code
+        # Test 3) Remplissage rt_code_ext
         filled_ext   = df_ropt['rt_code_ext'].replace({'nan':'','none':''}).dropna().map(bool).sum()
         fill_ext_pct = round(filled_ext / total * 100, 2) if total else 0
 
-        # parmi ceux remplis, détecter mismatch
-        df_ext = df_ropt[df_ropt['rt_code_ext'].astype(bool)]
-        mismatch = df_ext[df_ext['rt_code_ext'] != df_ext['rt_code']]
-        mismatched_list = mismatch.apply(
-            lambda r: f"{r['rt_code']}≠{r['rt_code_ext']}", axis=1
-        ).unique().tolist()
-        mismatch_count = int(len(mismatch))
-        mismatch_pct   = round(mismatch_count / filled_ext * 100, 2) if filled_ext else 0
+        # Test 4) Cohérence rt_code → rt_code_ext
+        code_ext_ref = {}
+        code_ext_conflicts = []
+        for _, row in df_ropt[['rt_code', 'rt_code_ext']].dropna().iterrows():
+            code = row['rt_code']
+            ext  = row['rt_code_ext']
+            if code not in code_ext_ref:
+                code_ext_ref[code] = ext
+            elif code_ext_ref[code] != ext:
+                code_ext_conflicts.append(f"{code} → {code_ext_ref[code]} ≠ {ext}")
+        conflict_count = len(code_ext_conflicts)
+        conflict_pct   = round(conflict_count / total * 100, 2) if total else 0
 
-        # préparer le JSON
+        # Résultat JSON
         result = {
-            "status":             "success",
-            "export_date":        export_date,
-            "total_rows":         total,
+            "status":            "success",
+            "export_date":       export_date,
+            "total_rows":        total,
 
-            "fo_missing":         fo_missing,
-            "fo_missing_count":   fo_missing_count,
-            "fo_missing_pct":     fo_missing_pct,
+            "unique_rt_id":      unique_rt_id,
+            "duplicate_count":   duplicate_count,
+            "duplicate_pct":     duplicate_pct,
 
-            "filled_ext":         filled_ext,
-            "fill_ext_pct":       fill_ext_pct,
+            "fo_missing":        fo_missing,
+            "fo_missing_count":  fo_missing_count,
+            "fo_missing_pct":    fo_missing_pct,
 
-            "mismatched_list":    mismatched_list,
-            "mismatch_count":     mismatch_count,
-            "mismatch_pct":       mismatch_pct,
+            "filled_ext":        filled_ext,
+            "fill_ext_pct":      fill_ext_pct,
+
+            "code_conflicts":    code_ext_conflicts,
+            "conflict_count":    conflict_count,
+            "conflict_pct":      conflict_pct,
         }
 
-        # convertir numpy → natifs
+        # Conversion JSON safe
         import numpy as np
         for k, v in list(result.items()):
             if isinstance(v, np.integer):    result[k] = int(v)
             elif isinstance(v, np.floating): result[k] = float(v)
             elif isinstance(v, np.ndarray):  result[k] = v.tolist()
 
-        # export CSV
+        # CSV export
         export_dir = os.path.join('static','exports'); os.makedirs(export_dir, exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         csv_fn = f"Analyse_ROpt_{export_date}_{ts}.csv"
         csv_p  = os.path.join(export_dir, csv_fn)
-        with open(csv_p,'w',newline='',encoding='utf-8') as f:
+        with open(csv_p, 'w', newline='', encoding='utf-8') as f:
             w = csv.writer(f, delimiter=';')
             w.writerow([f"Analyse t_ropt", export_date])
             w.writerow([])
             w.writerow(["Total de lignes", total])
             w.writerow([])
-            w.writerow(["1) rt_fo_code manquants", fo_missing_count, f"{fo_missing_pct}%"])
+            w.writerow(["1) Unicité de rt_id", unique_rt_id, f"{100 - duplicate_pct}%", "Doublons", duplicate_count, f"{duplicate_pct}%"])
+            w.writerow([])
+            w.writerow(["2) rt_fo_code manquants", fo_missing_count, f"{fo_missing_pct}%"])
             w.writerow(["   Valeurs", ", ".join(fo_missing[:10]) or "Aucun"])
             w.writerow([])
-            w.writerow(["2) rt_code_ext rempli", filled_ext, f"{fill_ext_pct}%"])
-            w.writerow(["3) rt_code ≠ rt_code_ext", mismatch_count, f"{mismatch_pct}%"])
-            w.writerow(["   Exemples", ", ".join(mismatched_list[:10]) or "Aucun"])
+            w.writerow(["3) rt_code_ext rempli", filled_ext, f"{fill_ext_pct}%"])
+            w.writerow([])
+            w.writerow(["4) Conflits multiples rt_code/rt_code_ext", conflict_count, f"{conflict_pct}%"])
+            w.writerow(["   Exemples", ", ".join(code_ext_conflicts[:10]) or "Aucun"])
         result["csv_path"] = f"/static/exports/{csv_fn}"
 
-        # export HTML
+        # HTML export
         def render_list(lst):
             if not lst: return "Aucun"
             vis = lst[:10]; more = lst[10:]
@@ -3600,7 +3930,7 @@ def analyze_ropt():
 
         html_fn = f"Analyse_ROpt_{export_date}_{ts}.html"
         html_p  = os.path.join(export_dir, html_fn)
-        with open(html_p,'w',encoding='utf-8') as f:
+        with open(html_p, 'w', encoding='utf-8') as f:
             f.write(f"""<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><title>Analyse t_ropt – {export_date}</title>
 <style>
@@ -3612,16 +3942,20 @@ def analyze_ropt():
 </style></head><body>
 <h1>Analyse t_ropt – {export_date}</h1>
 
-<h2>1) rt_fo_code manquants</h2>
+<h2>1) Unicité de rt_id</h2>
+<p>Uniques : <strong>{unique_rt_id}/{total}</strong> ({100 - duplicate_pct}%)</p>
+<p>Doublons : <strong>{duplicate_count}</strong> ({duplicate_pct}%)</p>
+
+<h2>2) rt_fo_code manquants</h2>
 <p>Count: <strong>{fo_missing_count}/{total}</strong> ({fo_missing_pct}%)</p>
 <p>{render_list(fo_missing)}</p>
 
-<h2>2) rt_code_ext</h2>
+<h2>3) rt_code_ext</h2>
 <p>Remplis: <strong>{filled_ext}/{total}</strong> ({fill_ext_pct}%)</p>
 
-<h2>3) Correspondance rt_code vs rt_code_ext</h2>
-<p>Mismatches: <strong>{mismatch_count}/{filled_ext}</strong> ({mismatch_pct}%)</p>
-<p>{render_list(mismatched_list)}</p>
+<h2>4) Conflits multiples rt_code/rt_code_ext</h2>
+<p>Incohérences : <strong>{conflict_count}/{total}</strong> ({conflict_pct}%)</p>
+<p>{render_list(code_ext_conflicts)}</p>
 
 </body></html>""")
         result["html_path"] = f"/static/exports/{html_fn}"
@@ -3630,10 +3964,11 @@ def analyze_ropt():
 
     except Exception as e:
         return jsonify({
-            "status":"error",
-            "message":str(e),
-            "traceback":traceback.format_exc()
+            "status": "error",
+            "message": str(e),
+            "traceback": traceback.format_exc()
         }), 500
+
 
 #coherence t_sitetech
 @app.route('/analyze_sitetech', methods=['POST'])
@@ -3662,6 +3997,12 @@ def analyze_sitetech():
         df_org['or_code']     = df_org['or_code'].astype(str).str.strip().str.lower()
 
         total = len(df_site)
+
+        unique_st_code   = df_site['st_code'].astype(str).str.strip().nunique()
+        duplicate_count  = total - unique_st_code
+        duplicate_pct    = round(duplicate_count / total * 100, 2) if total else 0
+        unique_pct       = round(unique_st_code / total * 100, 2) if total else 0
+
 
         # 1) st_nd_code ∈ t_noeud.nd_code
         mask_nd      = df_site['st_nd_code'].isin(df_nd['nd_code'])
@@ -3698,6 +4039,12 @@ def analyze_sitetech():
             "gest_missing":     gest_missing,
             "gest_miss_cnt":    gest_miss_cnt,
             "gest_miss_pct":    gest_miss_pct,
+
+            "unique_st_code":  unique_st_code,
+            "duplicate_count": duplicate_count,
+            "duplicate_pct":   duplicate_pct,
+            "unique_pct":      unique_pct,
+
         }
 
         # convertir numpy → natifs
@@ -3727,6 +4074,13 @@ def analyze_sitetech():
             w.writerow(["st_nd_code",         ", ".join(nd_missing[:10])    or "Aucun"])
             w.writerow(["st_prop",            ", ".join(prop_missing[:10])  or "Aucun"])
             w.writerow(["st_gest",            ", ".join(gest_missing[:10])  or "Aucun"])
+            w.writerow([])
+            w.writerow(["Analyse d’unicité sur st_code"])
+            w.writerow(["Total de lignes", total])
+            w.writerow(["Codes uniques", unique_st_code, f"{unique_pct}%"])
+            w.writerow(["Doublons", duplicate_count, f"{duplicate_pct}%"])
+            w.writerow([])
+
         result["csv_path"] = f"/static/exports/{csv_fn}"
 
         # export HTML
@@ -3755,6 +4109,14 @@ def analyze_sitetech():
  .voir-plus {{color:blue;cursor:pointer;text-decoration:underline}}
 </style></head><body>
   <h1>Analyse t_sitetech – {export_date}</h1>
+  <h2>Unicité de st_code</h2>
+<table>
+  <tr><th>Mesure</th><th>Valeur</th></tr>
+  <tr><td>Total de lignes</td><td>{total}</td></tr>
+  <tr><td>Codes uniques</td><td>{unique_st_code} ({unique_pct}%)</td></tr>
+  <tr><td>Doublons</td><td>{duplicate_count} ({duplicate_pct}%)</td></tr>
+</table><br>
+
   <table>
     <tr><th>Test</th><th>Manquants/Total</th><th>%</th></tr>
     <tr><td>st_nd_code</td>
@@ -3786,6 +4148,7 @@ def analyze_sitetech():
             "traceback": traceback.format_exc()
         }), 500
 
+
 #coherence t_suf
 @app.route('/analyze_suf', methods=['POST'])
 def analyze_suf():
@@ -3810,12 +4173,22 @@ def analyze_suf():
         df_suf['sf_ad_code']  = df_suf['sf_ad_code'].astype(str).str.strip().str.lower()
         df_suf['sf_oper']     = df_suf['sf_oper'].astype(str).str.strip().str.lower()
         df_suf['sf_prop']     = df_suf['sf_prop'].astype(str).str.strip().str.lower()
+        df_suf['sf_code'] = df_suf['sf_code'].astype(str).str.strip().str.lower()
+
 
         df_noeud['nd_code']   = df_noeud['nd_code'].astype(str).str.strip().str.lower()
         df_addr['ad_code']    = df_addr['ad_code'].astype(str).str.strip().str.lower()
         df_org['or_code']     = df_org['or_code'].astype(str).str.strip().str.lower()
 
+       
+
         total = len(df_suf)
+
+        unique_sf_code  = df_suf['sf_code'].nunique()
+        duplicate_count = total - unique_sf_code
+        duplicate_pct   = round(duplicate_count / total * 100, 2) if total else 0
+        unique_pct      = round(unique_sf_code / total * 100, 2) if total else 0
+
 
         # 1) sf_nd_code ∈ t_noeud.nd_code
         mask_nd      = df_suf['sf_nd_code'].isin(df_noeud['nd_code'])
@@ -3862,6 +4235,12 @@ def analyze_suf():
             "prop_missing":  prop_missing,
             "prop_miss_cnt": prop_miss_cnt,
             "prop_miss_pct": prop_miss_pct,
+
+            "unique_sf_code":  unique_sf_code,
+            "duplicate_count": duplicate_count,
+            "duplicate_pct":   duplicate_pct,
+            "unique_pct":      unique_pct,
+
         }
 
         # convertir numpy → natifs
@@ -3891,6 +4270,10 @@ def analyze_suf():
             w.writerow(["sf_ad_code",  ", ".join(ad_missing[:10])    or "Aucun"])
             w.writerow(["sf_oper",     ", ".join(oper_missing[:10])  or "Aucun"])
             w.writerow(["sf_prop",     ", ".join(prop_missing[:10])  or "Aucun"])
+            w.writerow([])
+            w.writerow(["Unicité de sf_code", unique_sf_code, f"{unique_pct}%"])
+            w.writerow(["Doublons", duplicate_count, f"{duplicate_pct}%"])
+
         result["csv_path"] = f"/static/exports/{csv_fn}"
 
         # export HTML
@@ -3922,6 +4305,10 @@ def analyze_suf():
 </style></head><body>
   <h1>Analyse t_suf – {export_date}</h1>
   <table>
+  <h2>Unicité de sf_code</h2>
+<p>Uniques : <strong>{unique_sf_code}/{total}</strong> ({unique_pct}%)</p>
+<p>Doublons : <strong>{duplicate_count}</strong> ({duplicate_pct}%)</p>
+
     <tr><th>Test</th><th>Manquants/Total</th><th>%</th></tr>
     <tr><td>sf_nd_code</td><td>{nd_miss_cnt}/{total}</td><td>{nd_miss_pct}%</td></tr>
     <tr><td>sf_ad_code</td><td>{ad_miss_cnt}/{total}</td><td>{ad_miss_pct}%</td></tr>
@@ -3947,6 +4334,7 @@ def analyze_suf():
             "message":   str(e),
             "traceback": traceback.format_exc()
         }), 500
+
 
 #cohérence t_tiroir
 @app.route('/analyze_tiroir', methods=['POST'])
@@ -3977,6 +4365,13 @@ def analyze_tiroir():
         df_org['or_code']       = df_org['or_code'].astype(str).str.strip().str.lower()
 
         total = len(df_tiroir)
+
+        # Analyse unicité de ti_code
+        ti_code_unique = df_tiroir['ti_code'].nunique()
+        ti_code_dup    = total - ti_code_unique
+        ti_code_dup_pct = round(ti_code_dup / total * 100, 2) if total else 0
+        ti_code_unique_pct = round(ti_code_unique / total * 100, 2) if total else 0
+
 
         # 1) ti_ba_code ∈ t_baie.ba_code
         mask_ba      = df_tiroir['ti_ba_code'].isin(df_baie['ba_code'])
@@ -4013,6 +4408,12 @@ def analyze_tiroir():
             "prop_missing":  prop_missing,
             "prop_cnt":      prop_cnt,
             "prop_pct":      prop_pct,
+
+            "ti_code_unique":      ti_code_unique,
+            "ti_code_unique_pct":  ti_code_unique_pct,
+            "ti_code_dup":         ti_code_dup,
+            "ti_code_dup_pct":     ti_code_dup_pct
+
         }
 
         # Convert numpy → natifs
@@ -4040,6 +4441,9 @@ def analyze_tiroir():
             w.writerow(["ti_ba_code",      ", ".join(ba_missing[:10])    or "Aucun"])
             w.writerow(["ti_rf_code",      ", ".join(rf_missing[:10])    or "Aucun"])
             w.writerow(["ti_prop",         ", ".join(prop_missing[:10])  or "Aucun"])
+            w.writerow([])
+            w.writerow(["ti_code (unicité)", f"{ti_code_unique}/{total}", f"{ti_code_unique_pct}%"])
+
         result["csv_path"] = f"/static/exports/{csv_fn}"
 
         # Export HTML
@@ -4093,6 +4497,7 @@ def analyze_tiroir():
             "traceback": traceback.format_exc()
         }), 500
 
+
 #cohérence t_cableline
 @app.route('/analyze_cableline', methods=['POST'])
 def analyze_cableline():
@@ -4116,6 +4521,12 @@ def analyze_cableline():
 
         total = len(df_cl)
 
+        unique_cl_code  = df_cl['cl_code'].nunique()
+        duplicate_count = total - unique_cl_code
+        duplicate_pct   = round(duplicate_count / total * 100, 2) if total else 0
+        unique_pct      = round(unique_cl_code / total * 100, 2) if total else 0
+
+
         # Test cl_cb_code ∈ t_cable.cb_code
         mask      = df_cl['cl_cb_code'].isin(df_cable['cb_code'])
         missing   = df_cl.loc[~mask, 'cl_cb_code'].dropna().unique().tolist()
@@ -4131,6 +4542,12 @@ def analyze_cableline():
             "missing":       missing,
             "miss_cnt":      miss_cnt,
             "miss_pct":      miss_pct,
+
+            "unique_cl_code":  unique_cl_code,
+            "duplicate_count": duplicate_count,
+            "duplicate_pct":   duplicate_pct,
+            "unique_pct":      unique_pct,
+
         }
 
         # Convert numpy → natifs
@@ -4156,6 +4573,10 @@ def analyze_cableline():
             w.writerow([])
             w.writerow(["Détail (max 10)"])
             w.writerow(["cl_cb_code",        ", ".join(missing[:10]) or "Aucun"])
+            w.writerow([])
+            w.writerow(["Unicité de cl_code", unique_cl_code, f"{unique_pct}%"])
+            w.writerow(["Doublons", duplicate_count, f"{duplicate_pct}%"])
+
         result["csv_path"] = f"/static/exports/{csv_fn}"
 
         # Export HTML
@@ -4185,6 +4606,10 @@ def analyze_cableline():
  .voir-plus {{color:blue;cursor:pointer;text-decoration:underline}}
 </style></head><body>
   <h1>Analyse t_cableline – {export_date}</h1>
+  <h2>Unicité de cl_code</h2>
+<p>Uniques : <strong>{unique_cl_code}/{total}</strong> ({unique_pct}%)</p>
+<p>Doublons : <strong>{duplicate_count}</strong> ({duplicate_pct}%)</p>
+
   <table>
     <tr><th>Test</th><th>Manquants/Total</th><th>%</th></tr>
     <tr><td>cl_cb_code</td><td>{miss_cnt}/{total}</td><td>{miss_pct}%</td></tr>
@@ -4205,7 +4630,8 @@ def analyze_cableline():
             "message":   str(e),
             "traceback": traceback.format_exc()
         }), 500
-    
+
+
 #coherence t_noeud
 @app.route('/analyze_noeud', methods=['POST'])
 def analyze_noeud():
@@ -4223,8 +4649,30 @@ def analyze_noeud():
 
         # Normalisation des valeurs (strip + upper)
         df_nd['nd_codeext'] = df_nd['nd_codeext'].astype(str).str.strip().str.upper()
+        
+        # Détection automatique d'erreur : nd_codeext identique à nd_code → mauvais mapping
+        if df_nd["nd_codeext"].equals(df_nd["nd_code"]):
+            raise ValueError(" Problème détecté : 'nd_codeext' contient les mêmes valeurs que 'nd_code'. Vérifie la table source.")
+        
+        df_nd["nd_code"]    = df_nd["nd_code"].astype(str).str.strip()
+        df_nd["nd_codeext"] = df_nd["nd_codeext"].astype(str).str.strip().str.upper()
+
 
         total = len(df_nd)
+
+        unique_nd_code  = df_nd['nd_code'].nunique()
+        duplicate_count = total - unique_nd_code
+        duplicate_pct   = round(duplicate_count / total * 100, 2) if total else 0
+        duplicates = (
+            df_nd['nd_code']
+            .value_counts()
+            .loc[lambda x: x > 1]
+            .index
+            .tolist()
+        )
+
+        unique_pct      = round(unique_nd_code / total * 100, 2) if total else 0
+
 
         # Test : codeex ∈ {TERRITOIRE, HORS TERRITOIRE}
         valid       = {"TERRITOIRE", "HORS TERRITOIRE"}
@@ -4240,7 +4688,13 @@ def analyze_noeud():
             "total_rows":    total,
             "missing":       missing,
             "miss_count":    miss_count,
-            "miss_pct":      miss_pct
+            "miss_pct":      miss_pct,
+            "unique_nd_code":  unique_nd_code,
+            "duplicate_count": duplicate_count,
+            "duplicate_pct":   duplicate_pct,
+            "unique_pct":      unique_pct,
+            "duplicates": duplicates,
+
         }
 
         # Convert numpy → natifs
@@ -4266,6 +4720,12 @@ def analyze_noeud():
             w.writerow([])
             w.writerow(["Détail (max 10)"])
             w.writerow(["nd_codeext", ", ".join(missing[:10]) or "Aucun"])
+            w.writerow([])
+            w.writerow(["Unicité de nd_code", unique_nd_code, f"{unique_pct}%"])
+            w.writerow(["Doublons", duplicate_count, f"{duplicate_pct}%"])
+            w.writerow(["Doublons", duplicate_count, f"{duplicate_pct}%"])
+
+
         result["csv_path"] = f"/static/exports/{csv_fn}"
 
         # Export HTML
@@ -4296,6 +4756,12 @@ def analyze_noeud():
  .voir-plus {{color:blue;cursor:pointer;text-decoration:underline}}
 </style></head><body>
   <h1>Analyse t_noeud – {export_date}</h1>
+  <h2>Unicité de nd_code</h2>
+<p>Uniques : <strong>{unique_nd_code}/{total}</strong> ({unique_pct}%)</p>
+<p>Doublons : <strong>{duplicate_count}</strong> ({duplicate_pct}%)</p>
+<h2>Codes nd_code dupliqués (max 10)</h2>
+<p>{render_list(duplicates)}</p>
+
   <table>
     <tr><th>Test</th><th>Manquants/Total</th><th>%</th></tr>
     <tr><td>nd_codeext</td><td>{miss_count}/{total}</td><td>{miss_pct}%</td></tr>
@@ -4316,3 +4782,279 @@ def analyze_noeud():
             "message":   str(e),
             "traceback": traceback.format_exc()
         }), 500
+
+
+#super boutou
+@app.route('/analyze_all', methods=['POST'])
+def analyze_all():
+    export_date = request.json.get("export_date") if request.is_json else request.form.get("export_date")
+
+    if not export_date:
+        return jsonify({"status": "error", "message": "Date manquante"}), 400
+
+    temp_dir = tempfile.mkdtemp()
+    result_dir = "static/results"
+    os.makedirs(result_dir, exist_ok=True)
+    collected_files = []
+
+    # Mapping des routes à appeler
+    route_map = {
+        "analyze_bpe": "/analyze_bpe",
+        "analyze_cable": "/analyze_cable",
+        "analyze_chambre": "/analyze_chambre",
+        "analyze_fourreaux": "/analyze_fourreaux",
+        "analyze_t_baie": "/analyze_t_baie",
+        "analyze_t_cab_cond": "/analyze_t_cab_cond",
+        "analyze_t_cassette": "/analyze_t_cassette",
+        "analyze_cheminement": "/analyze_cheminement",
+        "analyze_t_cond_chem": "/analyze_t_cond_chem",
+        "analyze_coherence_cable": "/analyze_coherence_cable",
+        "analyze_conduite_organisme": "/analyze_conduite_organisme",
+        "analyze_ebp": "/analyze_ebp",
+        "analyze_fibre_cable": "/analyze_fibre_cable",
+        "analyze_position": "/analyze_position",
+        "analyze_ltech": "/analyze_ltech",
+        "analyze_ptech": "/analyze_ptech",
+        "analyze_ropt": "/analyze_ropt",
+        "analyze_sitetech": "/analyze_sitetech",
+        "analyze_suf": "/analyze_suf",
+        "analyze_tiroir": "/analyze_tiroir",
+        "analyze_cableline": "/analyze_cableline",
+        "analyze_noeud": "/analyze_noeud"
+    }
+
+    for name, endpoint in route_map.items():
+        try:
+            resp = requests.post(f"http://127.0.0.1:5000{endpoint}", json={"export_date": export_date})
+            if resp.ok:
+                data = resp.json()
+                for path in [data.get("csv_path"), data.get("html_path")]:
+                    if path and os.path.exists(path[1:] if path.startswith("/") else path):
+                        abs_path = path[1:] if path.startswith("/") else path
+                        collected_files.append(abs_path)
+            else:
+                print(f"[!] {endpoint} : {resp.status_code} {resp.text}")
+        except Exception as e:
+            print(f"[Erreur] Appel à {endpoint} échoué → {e}")
+
+    # Création ZIP
+    zip_path = os.path.join(result_dir, f"analyse_complete_{export_date.replace('-', '_')}.zip")
+    with ZipFile(zip_path, 'w') as zipf:
+        for file in collected_files:
+            zipf.write(file, arcname=os.path.basename(file))
+
+    return jsonify({
+        "status": "ok",
+        "zip_path": f"/{zip_path}"
+    })
+
+@app.route('/liste_exports', methods=['GET'])
+def liste_exports():
+    try:
+        dates = db.session.query(Export.export_date).distinct().order_by(Export.export_date.desc()).all()
+        # Formater les dates sous forme de chaînes "aaaa-mm"
+        dates_str = [d[0] for d in dates if d[0]]
+        return jsonify({"dates": dates_str})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    try:
+        dates = db.session.query(Export.export_date).distinct().order_by(Export.export_date.desc()).all()
+        # Formater les dates sous forme de chaînes "aaaa-mm"
+        dates_str = [d[0] for d in dates if d[0]]
+        return jsonify({"dates": dates_str})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    try:
+        dates = db.session.query(Export.export_date).distinct().order_by(Export.export_date.desc()).all()
+        # Formater les dates sous forme de chaînes "aaaa-mm"
+        dates_str = [d[0] for d in dates if d[0]]
+        return jsonify({"dates": dates_str})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+    try:
+        dates = db.session.query(Export.export_date).distinct().order_by(Export.export_date.desc()).all()
+        # Formater les dates sous forme de chaînes "aaaa-mm"
+        dates_str = [d[0] for d in dates if d[0]]
+        return jsonify({"dates": dates_str})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/resilience')
+def resilience():
+    return render_template('resilience.html')
+
+
+@app.route('/upload_resilience', methods=['POST'])
+def upload_resilience():
+    files = request.files.getlist('files')
+    names = {key: request.form[key] for key in request.form if key.startswith('name-')}
+
+    from werkzeug.utils import secure_filename
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        for idx, file in enumerate(files):
+            name = names.get(f'name-{idx}')
+            if not name:
+                return jsonify({'status': 'error', 'message': f'Nom manquant pour {file.filename}'})
+
+            filepath = os.path.join(tmpdir, secure_filename(file.filename))
+            file.save(filepath)
+
+            try:
+                gdf = gpd.read_file(filepath)
+                gdf = gdf.to_crs(epsg=2154)
+                with engine.begin() as conn:
+                    conn.execute(text("SET search_path TO resilience, public"))
+                    gdf.to_postgis(name, conn, schema="resilience", if_exists="replace", index=False)
+            except Exception as e:
+                return jsonify({'status': 'error', 'message': f'Erreur traitement {file.filename} : {str(e)}'})
+
+    return jsonify({"status": "ok"})
+
+
+# Route pour lister les couches dans le schéma resilience
+@app.route('/resilience_layers')
+def get_resilience_layers():
+    with engine.connect() as conn:
+        # Tables
+        result1 = conn.execute(text("""
+            SELECT table_name 
+            FROM information_schema.tables
+            WHERE table_schema = 'resilience'
+              AND table_type IN ('BASE TABLE', 'VIEW');
+        """))
+        tables = [row[0] for row in result1]
+
+        # Vues matérialisées
+        result2 = conn.execute(text("""
+            SELECT matviewname FROM pg_matviews
+            WHERE schemaname = 'resilience';
+        """))
+        matviews = [row[0] for row in result2]
+
+    all_layers = sorted(set(tables + matviews))
+    return jsonify(all_layers)
+
+
+#route création de la view
+@app.route('/create_resilience_view', methods=['POST'])
+def create_resilience_view():
+    data = request.json
+    table_a = data.get('table_a')
+    table_b = data.get('table_b')
+    view_name = data.get('view_name', 'vue_resilience')
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("SET search_path TO resilience, public"))
+            conn.execute(text(f"""
+                DROP MATERIALIZED VIEW IF EXISTS "{view_name}";
+                CREATE SEQUENCE IF NOT EXISTS si_slr START 1;
+                CREATE MATERIALIZED VIEW "{view_name}" AS
+                SELECT DISTINCT ON (a.id)
+                    nextval('si_slr') AS fid,
+                    a.geometry,
+                    a.id,
+                    b.alea_inondation
+                FROM "{table_a}" a
+                LEFT JOIN "{table_b}" b
+                    ON ST_Intersects(a.geometry, b.geometry)
+                ORDER BY a.id, fid;
+            """))
+        return jsonify({'status': 'ok', 'view': view_name})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)})
+
+# Route pour charger une couche spécifique
+@app.route('/resilience_layer_data/<layer_name>')
+def get_resilience_layer_data(layer_name):
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("SET search_path TO resilience, public"))
+            gdf = gpd.read_postgis(f'SELECT * FROM "{layer_name}"', con=conn, geom_col='geometry')
+        gdf = gdf.to_crs(epsg=4326)
+        
+        # 🔧 Nettoyer les NaN
+        gdf_clean = gdf.copy()
+        gdf_clean = gdf_clean.replace({pd.NA: None})
+        gdf_clean = gdf_clean.fillna('')  
+        geojson = gdf_clean.__geo_interface__
+        table_data = gdf_clean.drop(columns='geometry').to_dict(orient='records')
+
+        return jsonify({
+            'status': 'ok',
+            'features': geojson['features'],
+            'table': table_data,
+            'columns': list(gdf_clean.columns)
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)})
+
+#dependance    
+@app.route('/resilience_dependencies/<layer>')
+def resilience_dependencies(layer):
+    with engine.connect() as conn:
+        result = conn.execute(text(f"""
+            SELECT matviewname FROM pg_matviews
+            WHERE schemaname = 'resilience'
+              AND definition ILIKE '%{layer}%';
+        """))
+        deps = [row[0] for row in result]
+    return jsonify({"dependencies": deps})
+
+# route de suppression d'une couche
+@app.route('/delete_resilience_layer', methods=['POST'])
+def delete_resilience_layer():
+    data = request.json
+    layer = data.get('layer')
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(f'''
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT FROM pg_matviews 
+                        WHERE matviewname = '{layer}' AND schemaname = 'resilience'
+                    ) THEN
+                        EXECUTE 'DROP MATERIALIZED VIEW resilience."{layer}" CASCADE';
+                    ELSE
+                        EXECUTE 'DROP TABLE IF EXISTS resilience."{layer}" CASCADE';
+                    END IF;
+                END;
+                $$;
+            '''))
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+@app.route('/download_resilience_layer/<layer>')
+def download_resilience_layer(layer):
+    format = request.args.get('format', 'csv')
+    try:
+        gdf = gpd.read_postgis(f'SELECT * FROM resilience."{layer}"', con=engine, geom_col='geometry')
+        gdf = gdf.to_crs(epsg=4326)
+        df = gdf.drop(columns='geometry')
+
+        tmp = tempfile.TemporaryDirectory()
+
+        if format == 'csv':
+            path = os.path.join(tmp.name, f"{layer}.csv")
+            df.to_csv(path, index=False, sep=';', encoding='utf-8')
+            return send_file(path, as_attachment=True, download_name=f"{layer}.csv")
+
+        elif format == 'html':
+            path = os.path.join(tmp.name, f"{layer}.html")
+            df.to_html(path, index=False)
+            return send_file(path, as_attachment=True, download_name=f"{layer}.html")
+
+        else:
+            return jsonify({'status': 'error', 'message': 'Format non supporté'}), 400
+
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500

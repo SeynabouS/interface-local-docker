@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Résilience Réseau</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Feuilles de style -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
+    <!-- Librairie Leaflet -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+</head>
+<body>
+
+<!-- Bandeau -->
+<header>
+    <div class="logo-container">
+        <img src="/image/logo.png" alt="Logo SIPPEREC">
+    </div>
+    <h1>Résilience Réseau</h1>
+    <div class="logout-container">
+        <a href="{{ url_for('interface') }}" class="btn-logout">Retour Interface</a>
+    </div>
+</header>
+
+<main>
+    <div class="container">
+
+        <!-- Section Import -->
+
+        <section class="section">
+            <h2>Importer des Données de Résilience</h2>
+            <form id="resilience-form" enctype="multipart/form-data">
+                <div class="file-input-container">
+                    <label for="resilience-files">Fichiers GPKG :</label>
+                    <input type="file" id="resilience-files" name="files" multiple accept=".gpkg">
+                </div>
+
+                <div id="file-names-container" class="file-list"></div>
+
+                <div class="button-container">
+                    <button type="button" id="resilience-upload-btn" class="btn-import-green">Importer dans la Base</button>
+                </div>
+            </form>
+        </section>
+
+     
+
+        <!-- Section Affichage -->
+        <section class="section">
+            <h2>Affichage des Couches Résilience</h2>
+
+            <!-- Ligne : Sélection de couche + couleur -->
+            <div style="display: flex; gap: 20px; align-items: center; margin-bottom: 20px;">
+                <label for="layer-selector"><strong>Choisir une couche :</strong></label>
+                <select id="layer-selector"></select>
+
+                <label for="color-picker"><strong>Couleur :</strong></label>
+                <input type="color" id="color-picker" value="#005aa3">
+            </div>
+
+            <!-- Bloc indépendant : cases à cocher / boutons supprimer -->
+            <div class="section" style="margin-bottom: 20px;">
+                <h3>Gestion des couches visibles</h3>
+                <div id="layer-controls" class="file-list"></div>
+            </div>
+
+            <!-- Carte -->
+            <div id="resilience-map" style="height: 600px;"></div>
+        </section>
+
+        <div class="section" style="margin-top: 20px;">
+
+        <section class="section">
+            <h2>Créer une Vue </h2>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <label for="layer-a"><strong>Table principale :</strong></label>
+                <select id="layer-a"></select>
+
+                <label for="layer-b"><strong>Table à joindre :</strong></label>
+                <select id="layer-b"></select>
+
+                <input type="text" id="view-name" placeholder="Nom de la vue (ex: inond_reso)" required>
+
+                <button id="create-view-btn" class="btn-import-green">Créer la Vue</button>
+            </div>
+        </section>
+
+        <!-- Section Table -->
+        <section class="section">
+            <h2>Table Attributaire</h2>
+
+            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                <label for="table-selector"><strong>Choisir une table :</strong></label>
+                <select id="table-selector"></select>
+            </div>
+
+            <div id="table-container" class="file-list"></div>
+        </section>
+
+
+    </div>
+</main>
+
+<script src="{{ url_for('static', filename='js/resilience.js') }}"></script>
+
+</body>
+</html>

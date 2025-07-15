@@ -411,3 +411,61 @@ a.download-btn:hover {
     background: #cc0000;
 }
 
+/* Nouveau style pour le bouton "Analyser Tout" */
+.btn-export-analysis-green {
+    width: 250px;
+    height: 50px;
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(90deg, #a79a28, #887021); 
+    color: #fff;
+    font-size: 1rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+}
+
+.btn-export-analysis-green:hover {
+    background: linear-gradient(90deg, #888121, #1e7e34);
+    transform: translateY(-2px) scale(1.05);
+}
+
+/* Bouton history export */
+.export-history {
+    margin-bottom: 1rem;
+}
+
+.accordion-toggle {
+    background: linear-gradient(90deg, #005aa3, #003d6b);
+    color: white;
+    font-weight: bold;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 8px;
+    width: 100%;
+    text-align: left;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+.accordion-toggle:hover {
+    background: linear-gradient(90deg, #003d6b, #002a4e);
+}
+
+.export-history-panel {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease;
+    background-color: #f9f9f9;
+    padding: 0 10px;
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+.export-history-panel.open {
+    max-height: 300px;
+    padding: 10px;
+}

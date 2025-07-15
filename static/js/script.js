@@ -264,7 +264,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 // Function to run analysis for CABLE
-// Function to run analysis for CABLE
 function runAnalysisCable(event) {
     console.log("Analyse des Câbles en cours...");
 
@@ -1262,7 +1261,7 @@ function runAnalysisTCassette() {
     </thead>
     <tbody>
       <tr>
-        <td>cs_bp_code</td>
+        <td>cs_code</td>
         <td>${total_cs_bp}</td>
         <td>${cs_bp_unique_rate}%</td>
         <td>${renderListWithToggle(duplicated_cs_bp)}</td>
@@ -1612,6 +1611,7 @@ function runAnalysisCoherenceCable() {
                     <table class="analysis-table">
                         <thead>
                             <tr>
+                                <th>cb_code</th>
                                 <th>cb_fo_disp</th>
                                 <th>cb_fo_util</th>
                                 <th>cb_capafo</th>
@@ -1629,8 +1629,23 @@ function runAnalysisCoherenceCable() {
             <div class="analysis-section">
                 <h3 class="section-title">Vérification cb_codeext</h3>
                 <p>Nombre de valeurs incorrectes : <strong>${data.nb_cb_codeext_invalides}</strong></p>
-            </div>`;
+            </div>
             
+          <div class="analysis-section">
+            <h3 class="section-title">Unicité de cb_code</h3>
+            <table class="analysis-table">
+              <thead>
+                <tr><th>Total</th><th>Taux (%)</th><th>Doublons</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>${data.total_cb_code}</td>
+                  <td>${data.cb_code_unique_rate}%</td>
+                  <td>${formatList(data.duplicated_cb_code)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>`;
             tableResults.innerHTML = html;
         }
 
@@ -1707,6 +1722,18 @@ function runAnalysisConduiteOrganisme() {
         const formatList = (items) => items.length ? items.join(", ") : "Aucune";
 
         tableResults.innerHTML = `
+        <div class="analysis-section">
+          <h3 class="section-title">Unicité des codes</h3>
+          <table class="analysis-table">
+            <thead>
+              <tr><th>Champ</th><th>Total</th><th>Taux unique (%)</th><th>Doublons</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>cd_code</td><td>${data.total_cd_code}</td><td>${data.cd_code_unique_rate}%</td><td>${formatList(data.duplicated_cd_code)}</td></tr>
+              <tr><td>or_code</td><td>${data.total_or_code}</td><td>${data.or_code_unique_rate}%</td><td>${formatList(data.duplicated_or_code)}</td></tr>
+            </tbody>
+          </table>
+        </div>
         <div class="analysis-section">
             <table class="analysis-table">
                 <thead><tr><th>Champ</th><th>Valeurs non trouvées</th></tr></thead>
@@ -1812,6 +1839,9 @@ function runAnalysisEBP() {
                 <table class="analysis-table">
                     <thead><tr><th>Champ</th><th>Incohérences</th></tr></thead>
                      <tbody>
+                     <tr><td>bp_code non uniques</td><td>${formatList(data.duplicated_bp_code)}</td></tr>
+                      <tr><td>Taux d’unicité de bp_code</td><td>${data.bp_code_unicity_rate}%</td></tr>
+
                         <tr><td>bp_codeext</td><td>${formatList(data.invalid_bp_codeext)}</td></tr>
                         <tr><td>bp_pt_code</td><td>${formatList(data.invalid_bp_pt_code)}</td></tr>
                         <tr><td>Taux de remplissage bp_pt_code</td><td>${data.bp_pt_code_fill_rate}%</td></tr>
@@ -1900,6 +1930,12 @@ function runAnalysisFibreCable() {
       };
   
       out.innerHTML=`
+      <div class="analysis-section">
+          <h3>3. Unicité des fo_code</h3>
+          <p>Total fibres : <strong>${data.total_fibres}</strong>,
+             Codes uniques : <strong>${data.unique_fo_codes}</strong></p>
+          <p>${renderList(data.fo_code_duplicates)}</p>
+        </div>
         <div class="analysis-section">
           <h3>1. FO_CB_CODE</h3>
           <p>Total: <strong>${data.total_fo}</strong> – sans correspondance: <strong>${data.non_found_count}</strong></p>
@@ -1982,6 +2018,21 @@ function runAnalysisPosition() {
       };
   
       out.innerHTML = `
+       <div class="analysis-section">
+          <h3>0. Unicité des ps_code</h3>
+          <p>Total : <strong>${data.total_ps_code}</strong> — Uniques : <strong>${data.unique_ps_code}</strong></p>
+          <table class="analysis-table">
+            <thead><tr><th>ps_code</th><th>Occurrences</th></tr></thead>
+            <tbody>
+              ${data.duplicated_ps_code.slice(0, 10).map(row => 
+                `<tr><td>${row.ps_code}</td><td>${row.count}</td></tr>`
+              ).join('')}
+              ${data.duplicated_ps_code.length > 10 
+                ? '<tr><td colspan="2">... autres</td></tr>' 
+                : ''}
+            </tbody>
+          </table>
+        </div>
         <div class="analysis-section">
           <h3>1. Remplissage des champs</h3>
           <table class="analysis-table">
@@ -2082,6 +2133,21 @@ function runAnalysisLTech() {
       };
   
       out.innerHTML = `
+      <div class="analysis-section">
+          <h3>Unicité des lt_code</h3>
+          <p>Total : <strong>${data.total_lt_code}</strong> — Uniques : <strong>${data.unique_lt_code}</strong></p>
+          <table class="analysis-table">
+            <thead><tr><th>lt_code</th><th>Occurrences</th></tr></thead>
+            <tbody>
+              ${data.duplicated_lt_code.slice(0, 10).map(row => 
+                `<tr><td>${row.lt_code}</td><td>${row.count}</td></tr>`
+              ).join('')}
+              ${data.duplicated_lt_code.length > 10 
+                ? '<tr><td colspan="2">... autres</td></tr>'
+                : ''}
+            </tbody>
+          </table>
+        </div>
         <div class="analysis-section">
           <h3>Manquants par champ</h3>
           <table class="analysis-table">
@@ -2174,6 +2240,16 @@ function runAnalysisLTech() {
       };
   
       out.innerHTML=`
+              <div class="analysis-section">
+          <h3>0. Unicité de pt_code</h3>
+          <p>
+            Total : <strong>${data.unicite_pt_code.total}</strong><br>
+            Remplis : <strong>${data.unicite_pt_code.remplis}</strong><br>
+            Uniques : <strong>${data.unicite_pt_code.uniques}</strong><br>
+            Doublons : ${renderList(data.unicite_pt_code.doublons)}
+          </p>
+        </div>
+
         <div class="analysis-section">
           <h3>Résumé des tests</h3>
           <table class="analysis-table">
@@ -2226,74 +2302,83 @@ function runAnalysisLTech() {
   
 //coherence table t_ropt
 function runAnalysisROpt() {
-    const exportDate = document.getElementById('export-date-single')?.value;
-    if (!exportDate) { alert("Sélectionnez une date."); return; }
-  
-    const btn = document.getElementById('analyze-ropt');
-    const out = document.getElementById('table-results');
-    const err = document.getElementById('error-container') || (() => {
-      const d = document.createElement('div'); d.id='error-container';
-      document.getElementById('results-section').prepend(d);
-      return d;
-    })();
-  
-    btn.disabled = true;
-    out.innerHTML = "<div class='loading'>Analyse en cours…</div>";
-    err.innerHTML = "";
-  
-    fetch('/analyze_ropt', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({export_date: exportDate})
-    })
-    .then(r=> r.ok ? r.json() : r.json().then(e=>{throw new Error(e.message)}))
-    .then(data=>{
-      if(data.status==='error') throw new Error(data.message);
+  const exportDate = document.getElementById('export-date-single')?.value;
+  if (!exportDate) {
+    alert("Sélectionnez une date.");
+    return;
+  }
+
+  const btn = document.getElementById('analyze-ropt');
+  const out = document.getElementById('table-results');
+  const err = document.getElementById('error-container') || (() => {
+    const d = document.createElement('div');
+    d.id = 'error-container';
+    document.getElementById('results-section').prepend(d);
+    return d;
+  })();
+
+  btn.disabled = true;
+  out.innerHTML = "<div class='loading'>Analyse en cours…</div>";
+  err.innerHTML = "";
+
+  fetch('/analyze_ropt', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ export_date: exportDate })
+  })
+    .then(r => r.ok ? r.json() : r.json().then(e => { throw new Error(e.message) }))
+    .then(data => {
+      if (data.status === 'error') throw new Error(data.message);
+
       document.getElementById('analysis-title').textContent =
         `Analyse t_ropt (${exportDate})`;
-  
+
       const renderList = lst => {
-        if(!lst?.length) return "Aucun";
-        let vis = lst.slice(0,10).join(", "), more = lst.slice(10);
+        if (!lst?.length) return "Aucun";
+        let vis = lst.slice(0, 10).join(", "), more = lst.slice(10);
         return vis + (more.length
           ? `<span class="voir-plus" onclick="this.nextElementSibling.style.display='inline';this.style.display='none';">... Voir plus</span>
              <span style="display:none">, ${more.join(", ")}</span>`
           : '');
       };
-  
+
       out.innerHTML = `
         <table class="analysis-table">
-            <thead>
+          <thead>
             <tr>
-                <th>Test</th>
-                <th>Résultat</th>
-                <th>Détails</th>
+              <th>Test</th>
+              <th>Résultat</th>
+              <th>Détails</th>
             </tr>
-            </thead>
-            <tbody>
+          </thead>
+          <tbody>
             <tr>
-                <td>1) rt_fo_code → t_fibre.fo_code</td>
-                <td>${data.fo_missing_count}/${data.total_rows} (${data.fo_missing_pct}%)</td>
-                <td>${renderList(data.fo_missing)}</td>
-            </tr>
-            <tr>
-                <td>2) rt_code_ext rempli</td>
-                <td>${data.filled_ext}/${data.total_rows} (${data.fill_ext_pct}%)</td>
-                <td>–</td>
+              <td>1) Unicité de rt_id</td>
+              <td>${data.unique_rt_id}/${data.total_rows} (${(100 - data.duplicate_pct).toFixed(2)}%)</td>
+              <td>Doublons : ${data.duplicate_count} (${data.duplicate_pct}%)</td>
             </tr>
             <tr>
-                <td>3) rt_code = rt_code_ext</td>
-                <td>${data.mismatch_count}/${data.filled_ext} (${data.mismatch_pct}%)</td>
-                <td>${renderList(data.mismatched_list)}</td>
+              <td>2) rt_fo_code → t_fibre.fo_code</td>
+              <td>${data.fo_missing_count}/${data.total_rows} (${data.fo_missing_pct}%)</td>
+              <td>${renderList(data.fo_missing)}</td>
             </tr>
-            </tbody>
+            <tr>
+              <td>3) rt_code_ext rempli</td>
+              <td>${data.filled_ext}/${data.total_rows} (${data.fill_ext_pct}%)</td>
+              <td>–</td>
+            </tr>
+            <tr>
+              <td>4) Conflits multiples rt_code/rt_code_ext</td>
+              <td>${data.conflict_count}/${data.total_rows} (${data.conflict_pct}%)</td>
+              <td>${renderList(data.code_conflicts)}</td>
+            </tr>
+          </tbody>
         </table>
-        `;
+      `;
 
-  
-      ['csv','html'].forEach(ext => {
+      ['csv', 'html'].forEach(ext => {
         const a = document.getElementById(`download-results-${ext}`);
-        if(a && data[`${ext}_path`]) {
+        if (a && data[`${ext}_path`]) {
           a.href = data[`${ext}_path`];
           a.style.display = 'inline-block';
         }
@@ -2303,9 +2388,9 @@ function runAnalysisROpt() {
       err.innerHTML = `<p class="error-message">Erreur : ${e.message}</p>`;
       out.innerHTML = "";
     })
-    .finally(()=> btn.disabled = false);
-  }
-  
+    .finally(() => btn.disabled = false);
+}
+
   document.addEventListener('DOMContentLoaded', ()=>{
     const btn = document.getElementById('analyze-ropt');
     if(btn) btn.addEventListener('click', runAnalysisROpt);
@@ -2349,6 +2434,17 @@ function runAnalysisROpt() {
       };
   
       out.innerHTML = `
+      <table class="analysis-table">
+        <thead>
+          <tr><th>Analyse d’unicité sur st_code</th><th>Valeur</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Total de lignes</td><td>${data.total_rows}</td></tr>
+          <tr><td>Codes uniques</td><td>${data.unique_st_code} (${data.unique_pct}%)</td></tr>
+          <tr><td>Doublons</td><td>${data.duplicate_count} (${data.duplicate_pct}%)</td></tr>
+        </tbody>
+      </table><br>
+
         <table class="analysis-table">
           <thead>
             <tr><th>Test</th><th>Manquants/Total</th><th>%</th></tr>
@@ -2433,6 +2529,11 @@ function runAnalysisSuf() {
       };
   
       out.innerHTML = `
+      <tr><td>sf_code (unicité)</td>
+    <td>${data.unique_sf_code}/${data.total_rows}</td>
+    <td>${data.unique_pct}%</td></tr>
+
+      
         <table class="analysis-table">
           <thead>
             <tr><th>Test</th><th>Manquants/Total</th><th>%</th></tr>
@@ -2520,6 +2621,10 @@ function runAnalysisTiroir() {
       };
   
       out.innerHTML = `
+      <tr><td>ti_code (unicité)</td>
+    <td>${data.ti_code_unique}/${data.total_rows}</td>
+    <td>${data.ti_code_unique_pct}%</td></tr>
+
         <table class="analysis-table">
           <thead><tr><th>Test</th><th>Manquants/Total</th><th>%</th></tr></thead>
           <tbody>
@@ -2596,6 +2701,10 @@ function runAnalysisCableLine() {
       };
   
       out.innerHTML = `
+      <tr><td>cl_code (unicité)</td>
+    <td>${data.unique_cl_code}/${data.total_rows}</td>
+    <td>${data.unique_pct}%</td></tr>
+
         <table class="analysis-table">
           <thead><tr><th>Test</th><th>Manquants/Total</th><th>%</th></tr></thead>
           <tbody>
@@ -2669,9 +2778,17 @@ function runAnalysisNoeud() {
       };
   
       out.innerHTML = `
+      <tr><td>nd_code (unicité)</td>
+          <td>${data.unique_nd_code}/${data.total_rows}</td>
+          <td>${data.unique_pct}%</td></tr>
+        <h3>Codes nd_code dupliqués</h3>
+<p>${renderList(data.duplicates)}</p>
+
+
         <table class="analysis-table">
           <thead><tr><th>Test</th><th>Manquants/Total</th><th>%</th></tr></thead>
           <tbody>
+          
             <tr><td>nd_codeext</td>
                 <td>${data.miss_count}/${data.total_rows}</td>
                 <td>${data.miss_pct}%</td></tr>
@@ -2775,8 +2892,21 @@ function runAnalysisCheminement() {
               <td>–</td>
               <td>${data.cnt_ce}/${data.total_rows} (${data.pct_ce}%)</td>
             </tr>
+
           </tbody>
         </table>
+
+          <h3>Unicité de cm_code</h3>
+          <table class="analysis-table">
+            <thead><tr><th>Total</th><th>Taux (%)</th><th>Doublons</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>${data.total_cm}</td>
+                <td>${data.cm_code_unique_rate}%</td>
+                <td>${renderList(data.duplicated_cm_code)}</td>
+              </tr>
+            </tbody>
+          </table>
   
         <h3>Détails des valeurs invalides</h3>
         <table class="analysis-table">
@@ -2789,6 +2919,7 @@ function runAnalysisCheminement() {
             <tr><td>cm_codeext</td><td>${renderList(data.missing_ce)}</td></tr>
           </tbody>
         </table>`;
+        
   
       ['csv','html'].forEach(ext=>{
         const a = document.getElementById(`download-results-${ext}`);
@@ -2810,3 +2941,136 @@ function runAnalysisCheminement() {
     if (btn) btn.addEventListener('click', runAnalysisCheminement);
   });
   
+
+//super bouton
+function runAllAnalyses() {
+    const exportDate = document.getElementById('export-date-single').value;
+    const loadingIndicator = document.getElementById('loading-indicator-analyze-all');
+    const resultsContainer = document.getElementById('results-single');
+    
+    if (!exportDate) {
+        alert("Veuillez sélectionner une date d'export.");
+        return;
+    }
+
+    loadingIndicator.style.display = 'inline';
+    resultsContainer.innerHTML = "<p>Analyse globale en cours... Cela peut prendre du temps.</p>";
+
+    fetch('/analyze_all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ export_date: exportDate })
+    })
+    .then(response => {
+        if (!response.ok) throw new Error("Erreur serveur");
+        return response.json();
+    })
+    .then(data => {
+        resultsContainer.innerHTML = `
+            <h3>Analyse complète terminée.</h3>
+            <p>Vous pouvez télécharger tous les résultats ici :</p>
+            <a href="${data.zip_path}" class="btn-download">Télécharger le fichier ZIP</a>
+        `;
+    })
+    .catch(error => {
+        console.error("Erreur analyse globale :", error);
+        resultsContainer.innerHTML = `<p style="color: red;">Erreur : ${error.message}</p>`;
+    })
+    .finally(() => {
+        loadingIndicator.style.display = 'none';
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const analyzeAllBtn = document.getElementById('analyze-all-btn');
+    if (analyzeAllBtn) {
+        analyzeAllBtn.addEventListener('click', runAllAnalyses);
+    }
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('form-analyze-all');
+    const exportDateField = document.getElementById('export-date-single');
+    const hiddenField = document.getElementById('hidden-export-date-analyze-all');
+    const loading = document.getElementById('loading-indicator-analyze-all');
+    const resultsContainer = document.getElementById('results-single');
+
+    form.addEventListener('submit', function (event) {
+        event.preventDefault(); // Empêche l’envoi classique du formulaire
+
+        const exportDate = exportDateField.value;
+        if (!exportDate) {
+            alert("Veuillez sélectionner une date d'export.");
+            return;
+        }
+
+        hiddenField.value = exportDate;
+        loading.style.display = "inline";
+        resultsContainer.innerHTML = "<p>Analyse globale en cours, merci de patienter…</p>";
+
+        fetch('/analyze_all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ export_date: exportDate })
+        })
+        .then(response => {
+            if (!response.ok) throw new Error("Erreur lors de l'analyse globale.");
+            return response.json();
+        })
+        .then(data => {
+            resultsContainer.innerHTML = `
+                <h3>Analyse complète terminée.</h3>
+                <a href="${data.zip_path}" class="btn-download btn-download-green">
+                    Télécharger les Résultats (.zip)
+                </a>
+            `;
+        })
+        .catch(error => {
+            console.error("Erreur analyse tout :", error);
+            resultsContainer.innerHTML = `<p style="color: red;">Erreur : ${error.message}</p>`;
+        })
+        .finally(() => {
+            loading.style.display = "none";
+        });
+    });
+});
+
+//history bouton
+function toggleExportHistory() {
+    const panel = document.getElementById('export-history-panel');
+    const toggleBtn = document.querySelector('.accordion-toggle');
+
+    panel.classList.toggle('open');
+
+    if (panel.classList.contains('open')) {
+        toggleBtn.innerText = "Exports déjà disponibles ▴";
+    } else {
+        toggleBtn.innerText = "Exports déjà disponibles ▾";
+    }
+}
+
+function fetchExportHistory() {
+    fetch('/liste_exports')
+        .then(response => response.json())
+        .then(data => {
+            const historyList = document.getElementById('export-history-list');
+            historyList.innerHTML = '';
+
+            if (data.dates && data.dates.length > 0) {
+                data.dates.forEach(date => {
+                    const li = document.createElement('li');
+                    li.textContent = `• ${date}`;
+                    historyList.appendChild(li);
+                });
+            } else {
+                const li = document.createElement('li');
+                li.textContent = "Aucun export encore disponible.";
+                historyList.appendChild(li);
+            }
+        })
+        .catch(err => {
+            console.error("Erreur lors de la récupération des exports :", err);
+        });
+}
+
+document.addEventListener('DOMContentLoaded', fetchExportHistory);

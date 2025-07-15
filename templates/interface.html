@@ -24,13 +24,30 @@
         <!-- Section pour l'analyse d'un export à une date donnée -->
         <section class="section">
             <h2>Analyse d'un Export à une Date Donnée</h2>
+            <a href="{{ url_for('resilience') }}" class="btn-download">Accéder à la page Résilience Réseau</a>
+
             <form id="single-export-form" method="POST" enctype="multipart/form-data">
                 <div class="file-input-container">
-                    <input type="file" id="file-input-single" webkitdirectory directory multiple>
+                    <input
+                        type="file"
+                        id="file-input-single"
+                        webkitdirectory
+                        directory
+                        multiple
+                        accept=".csv,.xlsx,.json,.dbf,.shp,.geojson,.kml,.gpkg"
+                    />
                     <label for="file-input-single">Sélectionner un dossier (Export)</label>
                     <div id="selected-file-single" class="selected-file">Aucun dossier sélectionné</div>
                     <ul id="file-list-single" class="file-list"></ul>
                 </div>
+                <div class="export-history">
+                    <button type="button" class="accordion-toggle" onclick="toggleExportHistory()">Exports déjà disponibles ▾</button>
+                    <div id="export-history-panel" class="export-history-panel">
+                        <ul id="export-history-list" class="file-list"></ul>
+                    </div>
+                </div>
+
+
                 <div class="date-selector">
                     <label for="export-date-single">Date de l'Export :</label>
                     <input type="month" id="export-date-single" class="export-date-input" name="export-date-single">
@@ -46,6 +63,18 @@
                <!-- Nouveaux boutons ajoutés -->
                <div class="button-container">
                 
+               <!-- bouton analyser tout -->
+                <form id="form-analyze-all" action="/analyze_all" method="POST">
+                    <input type="hidden" id="hidden-export-date-analyze-all" name="export_date">
+                    <button type="submit" id="analyze-all-btn" class="btn-export-analysis-green">
+                        Analyser Tout (export unique)
+                    </button>
+                    <span id="loading-indicator-analyze-all" style="display: none;"></span>
+                </form>
+
+
+
+
                 <!-- Arborescence Livrable -->
                 <form action="/arborescence_livrable" method="POST">
                     <input type="hidden" id="hidden-export-date" name="export_date">

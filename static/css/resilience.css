@@ -1,0 +1,69 @@
+body {
+    font-family: 'Poppins', sans-serif;
+    background: #f4f4f4;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+}
+
+
+header {
+    background: linear-gradient(90deg, #003d6b, #005aa3);
+    color: #fff;
+    padding: 1.5rem 1rem;
+    text-align: center;
+    position: relative;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+header img {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    height: 60px;
+}
+
+header .btn-logout {
+    position: absolute;
+    right: 20px;
+    top: 20px;
+    background: #ff4d4d;
+    padding: 10px;
+    border-radius: 5px;
+    text-decoration: none;
+    color: white;
+}
+
+.logo-container {
+    background-color: #fff; /* Fond blanc */
+    padding: 16px; /* Espacement interne */
+    border-radius: 12px; /* Coins arrondis */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Ombre légère */
+    display: flex;
+    width: 70px; 
+    height: 16px; 
+    margin: 12 auto; 
+}
+
+.container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 2rem;
+    background: white;
+    border-radius: 10px;
+}
+
+button {
+    padding: 10px 20px;
+    background: #005aa3;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+button:hover {
+    background: #003d6b;
+}
