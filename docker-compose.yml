@@ -1,18 +1,23 @@
-version: '3.9'
 
 services:
   db:
-    image: postgis/postgis:15-3.3
+    image: postgis/postgis:16-master
     container_name: postgres_resilience
     restart: always
-    ports:
-      - "5433:5433"
     environment:
+      POSTGRES_DB: gracethd
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: gracethd1
+      POSTGRES_PASSWORD: 1234
+    ports:
+      - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - ./pgdata:/var/lib/postgresql/data
+      - ./gracethd.sql:/docker-entrypoint-initdb.d/gracethd.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   web:
     build: .
@@ -21,10 +26,14 @@ services:
       - "5000:5000"
     volumes:
       - .:/app
+    env_file:
+      - .env
     environment:
       - FLASK_ENV=development
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    command: ["/wait-for-it.sh", "db:5432", "--", "python", "app.py"]
 
 volumes:
   pgdata:

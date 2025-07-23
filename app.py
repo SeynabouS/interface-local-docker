@@ -39,9 +39,9 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s:%(mes
 # Connexion PostgreSQL
 username = urllib.parse.quote_plus(os.getenv("DB_USERNAME"))
 password = urllib.parse.quote_plus(os.getenv("DB_PASSWORD"))
-host = os.getenv("DB_HOST")
+host = os.getenv("DB_HOST", "5432")
 dbname = os.getenv("DB_NAME")
-port = "5433"
+port = "5432"
 
 app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql://{username}:{password}@{host}:{port}/{dbname}?options=-csearch_path=gracethd'
 #app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql://{username}:{password}@{host}:{port}/{dbname}'
